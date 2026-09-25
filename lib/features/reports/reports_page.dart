@@ -477,8 +477,12 @@ class _ReportTable extends StatelessWidget {
                               borderRadius: BorderRadius.circular(2),
                             ),
                           ),
-                        Text(
-                            item.type == 'Vendor' ? 'Stall Holder' : item.type),
+                        Flexible(
+                          child: Text(
+                            item.type == 'Vendor' ? 'Stall Holder' : item.type,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -542,12 +546,12 @@ class _ReportTable extends StatelessWidget {
     ).toList();
     return ScrollableDataTable(
       verticalController: verticalController,
-      minWidth: history ? 1450 : 1300,
+      minWidth: history ? 1450 : 1350,
       columnSpacing: 18,
       columns: history
           ? const [
               DataColumn(
-                columnWidth: FlexColumnWidth(.85),
+                columnWidth: FixedColumnWidth(130),
                 label: Text('TYPE'),
               ),
               DataColumn(
@@ -581,7 +585,7 @@ class _ReportTable extends StatelessWidget {
             ]
           : const [
               DataColumn(
-                columnWidth: FlexColumnWidth(.85),
+                columnWidth: FixedColumnWidth(130),
                 label: Text('TYPE'),
               ),
               DataColumn(
@@ -601,7 +605,7 @@ class _ReportTable extends StatelessWidget {
                 label: Text('CATEGORY'),
               ),
               DataColumn(
-                columnWidth: FlexColumnWidth(.9),
+                columnWidth: FixedColumnWidth(130),
                 label: Text('DATE'),
               ),
               DataColumn(
@@ -609,7 +613,7 @@ class _ReportTable extends StatelessWidget {
                 label: Text('STATUS'),
               ),
               DataColumn(
-                columnWidth: FlexColumnWidth(.8),
+                columnWidth: FixedColumnWidth(150),
                 label: Text('PRIORITY'),
               ),
             ],
@@ -650,14 +654,17 @@ class _ReportTabs extends StatelessWidget {
   final ValueChanged<String> onChanged;
 
   @override
-  Widget build(BuildContext context) => Row(
-        children: [
-          _tab(context, 'All Complaints', selected == 'All Types'),
-          const SizedBox(width: 8),
-          _tab(context, 'Stall Holders', selected == 'Stall Holders'),
-          const SizedBox(width: 8),
-          _tab(context, 'Customers', selected == 'Customers'),
-        ],
+  Widget build(BuildContext context) => SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _tab(context, 'All Complaints', selected == 'All Types'),
+            const SizedBox(width: 8),
+            _tab(context, 'Stall Holders', selected == 'Stall Holders'),
+            const SizedBox(width: 8),
+            _tab(context, 'Customers', selected == 'Customers'),
+          ],
+        ),
       );
 
   Widget _tab(BuildContext context, String label, bool active) => Material(

@@ -34,6 +34,16 @@ class _AccountsPageState extends ConsumerState<AccountsPage> {
   bool selectedAccountOpened = false;
 
   @override
+  void didUpdateWidget(covariant AccountsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selectedAccountId != oldWidget.selectedAccountId ||
+        widget.openDetailsOnLoad != oldWidget.openDetailsOnLoad) {
+      selectedAccountOpened = false;
+      _openSelectedAccount();
+    }
+  }
+
+  @override
   void dispose() {
     search.dispose();
     tableScrollController.dispose();
@@ -62,7 +72,6 @@ class _AccountsPageState extends ConsumerState<AccountsPage> {
     });
   }
 
-  @override
   @override
   Widget build(BuildContext context) {
     final data = ref.watch(
@@ -478,7 +487,7 @@ class _VendorTable extends StatelessWidget {
         label: Text('ACCOUNT STATUS'),
       ),
       DataColumn(
-        columnWidth: FlexColumnWidth(.7),
+        columnWidth: FixedColumnWidth(130),
         label: Text('ACTIONS'),
       ),
     ];
@@ -584,7 +593,7 @@ class _CustomerTable extends StatelessWidget {
           label: Text('ACCOUNT STATUS'),
         ),
         DataColumn(
-          columnWidth: FlexColumnWidth(.7),
+          columnWidth: FixedColumnWidth(130),
           label: Text('ACTIONS'),
         ),
       ],

@@ -5,8 +5,7 @@ import '../../core/utils/export/admin_export_service.dart';
 import '../../core/utils/export/module_export_data_builders.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/admin_widgets.dart';
-import '../../data/repositories/mock_repository.dart';
-import '../../models/admin_models.dart';
+import '../../data/repositories/analytics_repository.dart';
 import '../../models/app_models.dart';
 
 class AuditLogPage extends ConsumerStatefulWidget {
@@ -32,7 +31,7 @@ class _AuditLogPageState extends ConsumerState<AuditLogPage> {
 
   @override
   Widget build(BuildContext context) {
-    final auditLogs = ref.watch(appDataProvider.select((s) => s.auditLogs));
+    final auditLogs = ref.watch(auditLogsProvider);
     final entities = <String>{
       'All entities',
       ...auditLogs.map((item) => item.targetEntityType),

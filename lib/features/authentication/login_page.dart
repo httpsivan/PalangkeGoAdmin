@@ -10,7 +10,7 @@ import '../../core/animations/app_motion.dart';
 import '../../core/config/app_config.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/admin_widgets.dart';
-import '../../data/repositories/mock_repository.dart';
+import '../../data/repositories/auth_repository.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
@@ -28,10 +28,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     'assets/images/fish_market.jpg',
     'assets/images/dried_fish_stall.jpg',
     'assets/images/vegetable_stall.jpg',
-    'assets/images/market_background.png',
+    'assets/images/market_background.jpg',
   ];
 
   final formKey = GlobalKey<FormState>();
+  final _mobileScrollController = ScrollController();
+  final _desktopFormScrollController = ScrollController();
   // Demo credentials prefill only in demo mode — Firebase mode must never
   // pre-fill a real administrator's password.
   final email = TextEditingController();
@@ -60,6 +62,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
   @override
   void dispose() {
+    _mobileScrollController.dispose();
+    _desktopFormScrollController.dispose();
     email.dispose();
     password.dispose();
     super.dispose();
@@ -99,6 +103,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           final narrow = MediaQuery.sizeOf(loginContext).width < 820;
           final body = narrow
               ? SingleChildScrollView(
+                  controller: _mobileScrollController,
                   child: Column(
                     children: [
                       _market(loginContext, true),
@@ -628,9 +633,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       color: const Color(0xFFF8FAFC),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
       child: Center(
-        child: SingleChildScrollView(
-          child: card,
-        ),
+        child: isDesktop
+            ? SingleChildScrollView(
+                controller: _desktopFormScrollController,
+                child: card,
+              )
+            : card,
       ),
     );
 

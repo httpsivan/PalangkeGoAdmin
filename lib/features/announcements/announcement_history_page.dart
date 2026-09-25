@@ -7,8 +7,7 @@ import '../../core/utils/formatters.dart';
 import '../../core/widgets/admin_shell.dart';
 import '../../core/widgets/admin_widgets.dart';
 import '../../core/widgets/formatted_text.dart';
-import '../../data/repositories/mock_repository.dart';
-import '../../models/app_models.dart';
+import '../../data/repositories/announcements_repository.dart';
 import 'announcement_dialog.dart';
 
 class AnnouncementHistoryPage extends ConsumerStatefulWidget {
@@ -42,8 +41,7 @@ class _AnnouncementHistoryPageState
   @override
   Widget build(BuildContext context) {
     final colors = semanticColors(context);
-    final announcements =
-        ref.watch(appDataProvider.select((s) => s.announcements));
+    final announcements = ref.watch(announcementsProvider);
 
     // Metrics calculations
     final totalCount = announcements.length;
@@ -469,7 +467,7 @@ class _AnnouncementHistoryPageState
       ),
     ).then((confirmed) {
       if (confirmed == true && mounted) {
-        ref.read(appDataProvider.notifier).deleteAnnouncement(item.id);
+        ref.read(announcementsRepositoryProvider).deleteAnnouncement(item.id);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Announcement "${item.title}" has been deleted.'),

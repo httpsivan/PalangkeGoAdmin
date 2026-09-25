@@ -7,8 +7,7 @@ import '../../core/utils/export/module_export_data_builders.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/admin_shell.dart';
 import '../../core/widgets/admin_widgets.dart';
-import '../../data/repositories/mock_repository.dart';
-import '../../models/app_models.dart';
+import '../../data/repositories/vendor_repository.dart';
 import '../vendor_applications/verification_dialog.dart';
 
 class RenewalsPage extends ConsumerStatefulWidget {
@@ -78,7 +77,7 @@ class _RenewalsPageState extends ConsumerState<RenewalsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final renewals = ref.watch(appDataProvider.select((s) => s.renewals));
+    final renewals = ref.watch(renewalsProvider);
     final pendingCount = renewals
         .where((item) => item.status == RenewalStatus.reviewing)
         .length;
@@ -369,7 +368,7 @@ class _RenewalsPageState extends ConsumerState<RenewalsPage> {
                   PaginationBar(
                     total: values.length,
                     start: safePage * 10 + 1,
-                    end: ((safePage + 1) * 10).clamp(0, values.length),
+                    end: ((safePage + 1) * 10).clamp(0, values.length).toInt(),
                     page: safePage,
                     pageCount: totalPages,
                     onPageChanged: _goToPage,

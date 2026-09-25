@@ -741,7 +741,7 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                       const SizedBox(height: 7),
                       DropdownButtonFormField<String>(
                         isExpanded: true,
-                        value: selectedDuration,
+                        initialValue: selectedDuration,
                         items: const [
                           '1 Day',
                           '3 Days',
