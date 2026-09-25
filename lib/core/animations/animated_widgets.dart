@@ -16,43 +16,32 @@ class AnimatedPageSwitcher extends StatelessWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context) => AnimatedSwitcher(
-        duration: AppMotion.duration(context, AppMotion.page),
-        reverseDuration: AppMotion.duration(context, AppMotion.component),
-        switchInCurve: AppMotion.easeOut,
-        switchOutCurve: Curves.easeIn,
-        layoutBuilder: (currentChild, previousChildren) {
-          return Stack(
-            alignment: Alignment.topLeft,
-            children: <Widget>[
-              if (currentChild != null) currentChild,
-            ],
-          );
-        },
-        transitionBuilder: (child, animation) {
-          final curved = CurvedAnimation(
-            parent: animation,
-            curve: AppMotion.easeOut,
-          );
-          final opacity = curved.drive(CurveTween(curve: Curves.easeOut));
-          if (AppMotion.reducedMotion(context)) {
-            return FadeTransition(opacity: opacity, child: child);
-          }
-          return FadeTransition(
-            opacity: opacity,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(.025, 0),
-                end: Offset.zero,
-              ).animate(curved),
-              child: ScaleTransition(
-                scale: Tween<double>(begin: .99, end: 1).animate(curved),
-                child: child,
+  Widget build(BuildContext context) => RepaintBoundary(
+        child: AnimatedSwitcher(
+          duration: AppMotion.duration(context, const Duration(milliseconds: 140)),
+          reverseDuration:
+              AppMotion.duration(context, const Duration(milliseconds: 100)),
+          switchInCurve: Curves.easeOut,
+          switchOutCurve: Curves.easeIn,
+          layoutBuilder: (currentChild, previousChildren) {
+            return Stack(
+              alignment: Alignment.topLeft,
+              children: <Widget>[
+                if (currentChild != null) currentChild,
+              ],
+            );
+          },
+          transitionBuilder: (child, animation) {
+            return FadeTransition(
+              opacity: CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOut,
               ),
-            ),
-          );
-        },
-        child: KeyedSubtree(key: ValueKey(route), child: child),
+              child: child,
+            );
+          },
+          child: KeyedSubtree(key: ValueKey(route), child: child),
+        ),
       );
 }
 

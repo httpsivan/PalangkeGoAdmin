@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../data/repositories/mock_repository.dart';
+import '../../data/repositories/auth_repository.dart';
 import '../../features/accounts/accounts_page.dart';
 import '../../features/audit_log/audit_log_page.dart';
 import '../../features/admin_settings/admin_settings_page.dart';
@@ -30,51 +30,92 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
-      ShellRoute(
-        builder: (context, state, child) => AdminShell(child: child),
-        routes: [
-          GoRoute(
-            path: '/overview',
-            builder: (context, state) => const OverviewPage(),
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) =>
+            AdminShell(child: navigationShell),
+        branches: [
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/overview',
+                builder: (context, state) => const OverviewPage(),
+              ),
+            ],
           ),
-          GoRoute(
-            path: '/accounts',
-            builder: (context, state) => AccountsPage(
-              selectedAccountId: state.uri.queryParameters['accountId'],
-              openDetailsOnLoad: state.uri.queryParameters['open'] == '1',
-            ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/sales-reports',
+                builder: (context, state) => const SalesReportsPage(),
+              ),
+            ],
           ),
-          GoRoute(
-            path: '/applications',
-            builder: (context, state) => const VendorApplicationsPage(),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/accounts',
+                builder: (context, state) => AccountsPage(
+                  selectedAccountId: state.uri.queryParameters['accountId'],
+                  openDetailsOnLoad: state.uri.queryParameters['open'] == '1',
+                ),
+              ),
+            ],
           ),
-          GoRoute(
-            path: '/renewal',
-            builder: (context, state) => const RenewalsPage(),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/applications',
+                builder: (context, state) => const VendorApplicationsPage(),
+              ),
+            ],
           ),
-          GoRoute(
-            path: '/reports',
-            builder: (context, state) => const ReportsPage(),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/renewal',
+                builder: (context, state) => const RenewalsPage(),
+              ),
+            ],
           ),
-          GoRoute(
-            path: '/sales-reports',
-            builder: (context, state) => const SalesReportsPage(),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/reports',
+                builder: (context, state) => const ReportsPage(),
+              ),
+            ],
           ),
-          GoRoute(
-            path: '/audit-log',
-            builder: (context, state) => const AuditLogPage(),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/announcements',
+                builder: (context, state) => const AnnouncementHistoryPage(),
+              ),
+            ],
           ),
-          GoRoute(
-            path: '/announcements',
-            builder: (context, state) => const AnnouncementHistoryPage(),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/audit-log',
+                builder: (context, state) => const AuditLogPage(),
+              ),
+            ],
           ),
-          GoRoute(
-            path: '/notifications',
-            builder: (context, state) => const NotificationsPage(),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/notifications',
+                builder: (context, state) => const NotificationsPage(),
+              ),
+            ],
           ),
-          GoRoute(
-            path: '/admin-settings',
-            builder: (context, state) => const AdminSettingsPage(),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/admin-settings',
+                builder: (context, state) => const AdminSettingsPage(),
+              ),
+            ],
           ),
         ],
       ),

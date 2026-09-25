@@ -10,7 +10,7 @@ import '../../core/utils/export/module_export_data_builders.dart';
 import '../../core/widgets/admin_shell.dart';
 import '../../core/widgets/admin_widgets.dart';
 import '../../data/mock_data.dart';
-import '../../data/repositories/mock_repository.dart';
+import '../../data/repositories/analytics_repository.dart';
 import '../../models/admin_models.dart';
 import '../../models/app_models.dart';
 
@@ -181,7 +181,7 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
   @override
   Widget build(BuildContext context) {
     final colors = semanticColors(context);
-    final orders = ref.watch(appDataProvider.select((s) => s.orders));
+    final orders = ref.watch(ordersProvider);
     final categories = <String>{
       'All Categories',
       ...orders.expand((item) => item.items.map((line) => line.category)),
@@ -200,10 +200,6 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isWideDesktop = constraints.maxWidth >= 1200;
-        final isMediumScreen =
-            constraints.maxWidth >= 850 && constraints.maxWidth < 1200;
-
         return ListView(
           padding: EdgeInsets.zero,
           children: [

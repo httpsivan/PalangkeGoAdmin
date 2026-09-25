@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -11,148 +9,9 @@ import '../mock_data.dart';
 import '../../core/theme/theme_controller.dart';
 import 'firebase_admin_service.dart';
 
-const defaultAdminName = 'Kirren Michael Fraginal';
-const defaultAdminEmail = 'admin@palengkego.gov.ph';
-const defaultAdminPassword = 'Admin123!';
-
-class AdminProfile {
-  const AdminProfile({
-    required this.name,
-    required this.email,
-    required this.password,
-    this.avatarBytes,
-  });
-
-  final String name;
-  final String email;
-  final String password;
-  final Uint8List? avatarBytes;
-
-  AdminProfile copyWith({
-    String? name,
-    String? password,
-    Uint8List? avatarBytes,
-  }) =>
-      AdminProfile(
-        name: name ?? this.name,
-        email: email,
-        password: password ?? this.password,
-        avatarBytes: avatarBytes ?? this.avatarBytes,
-      );
-}
-
-Uint8List? _readAdminAvatar(SharedPreferences preferences) {
-  final encoded = preferences.getString('admin_avatar');
-  if (encoded == null || encoded.isEmpty) return null;
-  try {
-    return base64Decode(encoded);
-  } on FormatException {
-    return null;
-  }
-}
-
-final adminProfileProvider =
-    StateNotifierProvider<AdminProfileController, AdminProfile>((ref) {
-  return AdminProfileController(ref.watch(sharedPreferencesProvider));
-});
-
-class AdminProfileController extends StateNotifier<AdminProfile> {
-  AdminProfileController(this._preferences)
-      : super(
-          AdminProfile(
-            name: _preferences.getString('admin_name') ?? defaultAdminName,
-            email: defaultAdminEmail,
-            password: _preferences.getString('admin_password') ??
-                defaultAdminPassword,
-            avatarBytes: _readAdminAvatar(_preferences),
-          ),
-        );
-
-  final SharedPreferences _preferences;
-
-  Future<void> updateProfile({
-    required String name,
-    String? password,
-    Uint8List? avatarBytes,
-    bool removeAvatar = false,
-  }) async {
-    final nextPassword = password == null || password.trim().isEmpty
-        ? state.password
-        : password.trim();
-    final nextAvatar = removeAvatar ? null : avatarBytes ?? state.avatarBytes;
-    state = AdminProfile(
-      name: name.trim(),
-      email: state.email,
-      password: nextPassword,
-      avatarBytes: nextAvatar,
-    );
-    await _preferences.setString('admin_name', state.name);
-    await _preferences.setString('admin_password', state.password);
-    if (nextAvatar == null) {
-      await _preferences.remove('admin_avatar');
-    } else {
-      await _preferences.setString('admin_avatar', base64Encode(nextAvatar));
-    }
-  }
-}
-
-final authProvider = StateNotifierProvider<AuthController, bool>((ref) {
-  return AuthController(ref.watch(sharedPreferencesProvider))
-    .._attachFirebase(ref);
-});
-
-class AuthController extends StateNotifier<bool> {
-  AuthController(this._preferences)
-      : super(_preferences.getBool('isLoggedIn') ?? false);
-
-  final SharedPreferences _preferences;
-  bool _firebase = false;
-
-  /// In Firebase mode the Auth SDK owns the session; mirror it into this
-  /// notifier so the existing router redirect keeps working unchanged.
-  void _attachFirebase(Ref ref) {
-    _firebase = ref.read(firebaseEnabledProvider);
-    if (!_firebase) return;
-    FirebaseAdminService.instance.authState.listen((signedIn) {
-      state = signedIn;
-    });
-  }
-
-  Future<String?> login(
-    String email,
-    String password,
-    bool keepSignedIn,
-  ) async {
-    if (_firebase) {
-      final error =
-          await FirebaseAdminService.instance.signIn(email, password);
-      if (error == null) state = true;
-      return error;
-    }
-    await Future<void>.delayed(const Duration(milliseconds: 550));
-    final savedPassword =
-        _preferences.getString('admin_password') ?? defaultAdminPassword;
-    if (email.trim().toLowerCase() != defaultAdminEmail ||
-        password != savedPassword) {
-      return 'The email or password is incorrect.';
-    }
-    state = true;
-    await _preferences.setBool('isLoggedIn', keepSignedIn);
-    await _appendAuthAudit(_preferences, AuditAction.login);
-    return null;
-  }
-
-  Future<void> logout() async {
-    if (_firebase) {
-      await FirebaseAdminService.instance.signOut();
-      state = false; // also arrives via the authState listener
-      return;
-    }
-    await _appendAuthAudit(_preferences, AuditAction.logout);
-    state = false;
-    await _preferences.remove('isLoggedIn');
-  }
-}
+export 'auth_repository.dart';
+import 'auth_repository.dart';
+import '../mock/mock_admin_data_source.dart';
 
 class AppDataState {
   const AppDataState({
@@ -229,7 +88,8 @@ final appDataProvider = StateNotifierProvider<AppDataController, AppDataState>((
 
 class AppDataController extends StateNotifier<AppDataState> {
   AppDataController(this._preferences, {required this.firebaseEnabled})
-      : super(
+      : _dataSource = MockAdminDataSource(_preferences),
+        super(
           // Firebase mode starts EMPTY — live data is loaded from Firestore;
           // seeded demo fiction must never render as real market data.
           firebaseEnabled
@@ -263,6 +123,7 @@ class AppDataController extends StateNotifier<AppDataState> {
 
   final SharedPreferences _preferences;
   final bool firebaseEnabled;
+  final MockAdminDataSource _dataSource;
 
   /// Loads server truth. Called on startup and after every trusted
   /// mutation — the callables (and their audit trail) are the source of
@@ -286,31 +147,8 @@ class AppDataController extends StateNotifier<AppDataState> {
   }
 
   Future<void> _restore() async {
-    final blockedVendors =
-        _preferences.getStringList('blocked_vendors') ?? <String>[];
-    final blockedCustomers =
-        _preferences.getStringList('blocked_customers') ?? <String>[];
-    final unblockedVendors =
-        _preferences.getStringList('unblocked_vendors') ?? <String>[];
-    final unblockedCustomers =
-        _preferences.getStringList('unblocked_customers') ?? <String>[];
-    final vendorIds = blockedVendors.toSet();
-    final customerIds = blockedCustomers.toSet();
-    final unblockedVendorIds = unblockedVendors.toSet();
-    final unblockedCustomerIds = unblockedCustomers.toSet();
-    final storedAudits = _readAuditLogs();
-    final storedSuspensions = _readSuspensions();
-    final effectiveAudits =
-        storedAudits.isNotEmpty ? storedAudits : seedAuditLogs();
-    final effectiveSuspensions =
-        storedSuspensions.isNotEmpty ? storedSuspensions : seedSuspensions();
-    final blockedDetails = _readBlockedDetails();
-    final activeSuspensionIds = effectiveSuspensions
-        .where((item) => item.isActive)
-        .map((item) => item.accountId)
-        .toSet();
-    var restoredApplications =
-        state.applications.map(_restoreApplication).toList();
+    final restored = _dataSource.restore(MockAdminDataSource.initialSeeds());
+    var restoredApplications = restored.applications;
     if (restoredApplications
         .where((item) => item.status == ApplicationStatus.reviewing)
         .isEmpty) {
@@ -324,7 +162,7 @@ class AppDataController extends StateNotifier<AppDataState> {
       restoredApplications = seedApplications();
     }
 
-    var restoredRenewals = state.renewals.map(_restoreRenewal).toList();
+    var restoredRenewals = restored.renewals;
     if (restoredRenewals
         .where((item) => item.status == RenewalStatus.reviewing)
         .isEmpty) {
@@ -339,50 +177,13 @@ class AppDataController extends StateNotifier<AppDataState> {
     }
 
     state = state.copyWith(
-      vendors: state.vendors
-          .map(
-            (vendor) => vendorIds.contains(vendor.id)
-                ? vendor.copyWith(
-                    status: AccountStatus.blocked,
-                    blockedReason: blockedDetails[vendor.id]?['reason'],
-                    blockedFromReportId: blockedDetails[vendor.id]?['reportId'],
-                    blockedAt: DateTime.tryParse(
-                      blockedDetails[vendor.id]?['blockedAt'] ?? '',
-                    ),
-                    blockedBy: blockedDetails[vendor.id]?['blockedBy'],
-                  )
-                : activeSuspensionIds.contains(vendor.id)
-                    ? vendor.copyWith(status: AccountStatus.suspended)
-                    : unblockedVendorIds.contains(vendor.id)
-                        ? vendor.copyWith(status: AccountStatus.active)
-                        : vendor,
-          )
-          .toList(),
-      customers: state.customers
-          .map(
-            (customer) => customerIds.contains(customer.id)
-                ? customer.copyWith(
-                    status: AccountStatus.blocked,
-                    blockedReason: blockedDetails[customer.id]?['reason'],
-                    blockedFromReportId: blockedDetails[customer.id]
-                        ?['reportId'],
-                    blockedAt: DateTime.tryParse(
-                      blockedDetails[customer.id]?['blockedAt'] ?? '',
-                    ),
-                    blockedBy: blockedDetails[customer.id]?['blockedBy'],
-                  )
-                : activeSuspensionIds.contains(customer.id)
-                    ? customer.copyWith(status: AccountStatus.suspended)
-                    : unblockedCustomerIds.contains(customer.id)
-                        ? customer.copyWith(status: AccountStatus.active)
-                        : customer,
-          )
-          .toList(),
+      vendors: restored.vendors,
+      customers: restored.customers,
       applications: restoredApplications,
       renewals: restoredRenewals,
-      reports: state.reports.map(_restoreReport).toList(),
-      auditLogs: effectiveAudits,
-      suspensions: effectiveSuspensions,
+      reports: restored.reports,
+      auditLogs: restored.auditLogs,
+      suspensions: restored.suspensions,
     );
     await _expireSuspensions();
   }
@@ -1337,10 +1138,7 @@ class AppDataController extends StateNotifier<AppDataState> {
       timestamp: DateTime.now(),
     );
     state = state.copyWith(auditLogs: [audit, ...state.auditLogs]);
-    await _preferences.setStringList(
-      'admin_audit_logs',
-      state.auditLogs.map((item) => jsonEncode(_auditToMap(item))).toList(),
-    );
+    await _dataSource.persistAuditLogs(state.auditLogs);
   }
 
   Future<void> _persistBlockedAccountIds() async {
@@ -1360,64 +1158,13 @@ class AppDataController extends StateNotifier<AppDataState> {
     );
   }
 
-  Future<void> _persistBlockedDetails() => _preferences.setStringList(
-        'blocked_account_details',
-        [
-          ...state.vendors
-              .where((item) => item.status == AccountStatus.blocked)
-              .where((item) => item.blockedReason != null)
-              .map(
-                (item) => jsonEncode({
-                  'id': item.id,
-                  'reason': item.blockedReason,
-                  'reportId': item.blockedFromReportId,
-                  'blockedAt': item.blockedAt?.toIso8601String(),
-                  'blockedBy': item.blockedBy,
-                }),
-              ),
-          ...state.customers
-              .where((item) => item.status == AccountStatus.blocked)
-              .where((item) => item.blockedReason != null)
-              .map(
-                (item) => jsonEncode({
-                  'id': item.id,
-                  'reason': item.blockedReason,
-                  'reportId': item.blockedFromReportId,
-                  'blockedAt': item.blockedAt?.toIso8601String(),
-                  'blockedBy': item.blockedBy,
-                }),
-              ),
-        ].toList(),
+  Future<void> _persistBlockedDetails() => _dataSource.persistBlockedDetails(
+        vendors: state.vendors,
+        customers: state.customers,
       );
 
   Future<void> _persistApplication(VendorApplication application) =>
-      _preferences.setString(
-        'application_state_${application.id}',
-        jsonEncode({
-          'status': application.status.name,
-          'rejectionReason': application.rejectionReason,
-          'reviewedAt': application.reviewedAt?.toIso8601String(),
-          'reviewedBy': application.reviewedBy,
-        }),
-      );
-
-  VendorApplication _restoreApplication(VendorApplication application) {
-    final raw = _preferences.getString('application_state_${application.id}');
-    if (raw == null) return application;
-    try {
-      final map = Map<String, dynamic>.from(jsonDecode(raw) as Map);
-      return application.copyWith(
-        status: ApplicationStatus.values.byName(map['status'] as String),
-        rejectionReason: map['rejectionReason'] as String?,
-        reviewedAt: map['reviewedAt'] == null
-            ? null
-            : DateTime.tryParse(map['reviewedAt'] as String),
-        reviewedBy: map['reviewedBy'] as String?,
-      );
-    } catch (_) {
-      return application;
-    }
-  }
+      _dataSource.persistApplication(application);
 
   Future<void> resetMockRenewals() async {
     final keys = _preferences
@@ -1442,212 +1189,16 @@ class AppDataController extends StateNotifier<AppDataState> {
   }
 
   Future<void> _persistRenewal(RenewalRequest renewal) =>
-      _preferences.setString(
-        'renewal_state_${renewal.id}',
-        jsonEncode({'status': renewal.status.name}),
-      );
+      _dataSource.persistRenewal(renewal);
 
-  RenewalRequest _restoreRenewal(RenewalRequest renewal) {
-    final raw = _preferences.getString('renewal_state_${renewal.id}');
-    if (raw == null) return renewal;
-    try {
-      final map = Map<String, dynamic>.from(jsonDecode(raw) as Map);
-      return renewal.copyWith(
-        status: RenewalStatus.values.byName(map['status'] as String),
-      );
-    } catch (_) {
-      return renewal;
-    }
-  }
+  Future<void> _persistReport(Report report) =>
+      _dataSource.persistReport(report);
 
-  Map<String, Map<String, String>> _readBlockedDetails() {
-    final raw = _preferences.getStringList('blocked_account_details') ?? [];
-    final details = <String, Map<String, String>>{};
-    for (final item in raw) {
-      try {
-        final map = Map<String, dynamic>.from(jsonDecode(item) as Map);
-        final id = map['id'] as String?;
-        if (id == null) continue;
-        details[id] = {
-          for (final entry in map.entries)
-            if (entry.key != 'id' && entry.value != null)
-              entry.key: entry.value.toString(),
-        };
-      } catch (_) {
-        // Ignore malformed local overrides and keep the seeded account.
-      }
-    }
-    return details;
-  }
-
-  Future<void> _persistReport(Report report) => _preferences.setString(
-        'report_state_${report.id}',
-        jsonEncode({
-          'status': report.status.name,
-          'notes': report.notes,
-          'decision': report.decision,
-          'actionTaken': report.actionTaken,
-          'resolutionNote': report.resolutionNote,
-          'resolvedAt': report.resolvedAt?.toIso8601String(),
-          'resolvedBy': report.resolvedBy,
-        }),
-      );
-
-  Report _restoreReport(Report report) {
-    final raw = _preferences.getString('report_state_${report.id}');
-    final legacyNote = _preferences.getString('report_notes_${report.id}');
-    if (raw == null && legacyNote == null) return report;
-    try {
-      final map = raw == null
-          ? <String, dynamic>{'notes': legacyNote}
-          : Map<String, dynamic>.from(jsonDecode(raw) as Map);
-      final statusName = map['status'] as String?;
-      return report.copyWith(
-        status: statusName == null
-            ? report.status
-            : ReportStatus.values.byName(statusName),
-        notes: map['notes'] as String? ?? report.notes,
-        decision: map['decision'] as String?,
-        actionTaken: map['actionTaken'] as String?,
-        resolutionNote: map['resolutionNote'] as String?,
-        resolvedAt: map['resolvedAt'] == null
-            ? null
-            : DateTime.tryParse(map['resolvedAt'] as String),
-        resolvedBy: map['resolvedBy'] as String?,
-      );
-    } catch (_) {
-      return report;
-    }
-  }
-
-  List<AuditLog> _readAuditLogs() {
-    final raw = _preferences.getStringList('admin_audit_logs') ?? [];
-    return raw
-        .map((item) {
-          try {
-            return _auditFromMap(jsonDecode(item) as Map<String, dynamic>);
-          } catch (_) {
-            return null;
-          }
-        })
-        .whereType<AuditLog>()
-        .toList();
-  }
-
-  List<Suspension> _readSuspensions() {
-    final raw = _preferences.getStringList('admin_suspensions') ?? [];
-    return raw
-        .map((item) {
-          try {
-            return _suspensionFromMap(jsonDecode(item) as Map<String, dynamic>);
-          } catch (_) {
-            return null;
-          }
-        })
-        .whereType<Suspension>()
-        .toList();
-  }
-
-  Future<void> _persistSuspensions() => _preferences.setStringList(
-        'admin_suspensions',
-        state.suspensions
-            .map((item) => jsonEncode(_suspensionToMap(item)))
-            .toList(),
-      );
+  Future<void> _persistSuspensions() =>
+      _dataSource.persistSuspensions(state.suspensions);
 
   Future<void> _wait() => Future<void>.value();
 }
 
-Map<String, dynamic> _auditToMap(AuditLog item) => {
-      'id': item.id,
-      'administratorId': item.administratorId,
-      'administratorName': item.administratorName,
-      'action': item.action.name,
-      'targetEntityType': item.targetEntityType,
-      'targetEntityId': item.targetEntityId,
-      'targetUserName': item.targetUserName,
-      'previousValue': item.previousValue,
-      'newValue': item.newValue,
-      'reason': item.reason,
-      'metadata': item.metadata,
-      'timestamp': item.timestamp.toIso8601String(),
-    };
-
-AuditLog _auditFromMap(Map<String, dynamic> map) => AuditLog(
-      id: map['id'] as String,
-      administratorId: map['administratorId'] as String,
-      administratorName: map['administratorName'] as String,
-      action: AuditAction.values.byName(map['action'] as String),
-      targetEntityType: map['targetEntityType'] as String,
-      targetEntityId: map['targetEntityId'] as String,
-      targetUserName: map['targetUserName'] as String,
-      previousValue: map['previousValue'] as String,
-      newValue: map['newValue'] as String,
-      reason: map['reason'] as String,
-      metadata: Map<String, String>.from(map['metadata'] as Map),
-      timestamp: DateTime.parse(map['timestamp'] as String),
-    );
-
-Map<String, dynamic> _suspensionToMap(Suspension item) => {
-      'id': item.id,
-      'accountId': item.accountId,
-      'accountName': item.accountName,
-      'accountType': item.accountType,
-      'reason': item.reason,
-      'startDate': item.startDate.toIso8601String(),
-      'endDate': item.endDate.toIso8601String(),
-      'administratorId': item.administratorId,
-      'administratorName': item.administratorName,
-      'createdAt': item.createdAt.toIso8601String(),
-      'note': item.note,
-      'notifyUser': item.notifyUser,
-      'relatedReportId': item.relatedReportId,
-      'liftedAt': item.liftedAt?.toIso8601String(),
-    };
-
-Suspension _suspensionFromMap(Map<String, dynamic> map) => Suspension(
-      id: map['id'] as String,
-      accountId: map['accountId'] as String,
-      accountName: map['accountName'] as String,
-      accountType: map['accountType'] as String,
-      reason: map['reason'] as String,
-      startDate: DateTime.parse(map['startDate'] as String),
-      endDate: DateTime.parse(map['endDate'] as String),
-      administratorId: map['administratorId'] as String,
-      administratorName: map['administratorName'] as String? ?? 'Administrator',
-      createdAt: DateTime.parse(map['createdAt'] as String),
-      note: map['note'] as String,
-      notifyUser: map['notifyUser'] as bool,
-      relatedReportId: map['relatedReportId'] as String?,
-      liftedAt: map['liftedAt'] == null
-          ? null
-          : DateTime.parse(map['liftedAt'] as String),
-    );
-
 T? _firstOrNull<T>(Iterable<T> values) => values.isEmpty ? null : values.first;
 
-Future<void> _appendAuthAudit(
-  SharedPreferences preferences,
-  AuditAction action,
-) async {
-  final now = DateTime.now();
-  final audit = AuditLog(
-    id: 'AUD-${now.microsecondsSinceEpoch}',
-    administratorId: 'ADM-001',
-    administratorName: preferences.getString('admin_name') ?? defaultAdminName,
-    action: action,
-    targetEntityType: 'Authentication',
-    targetEntityId: 'admin-session',
-    targetUserName: defaultAdminEmail,
-    previousValue: action == AuditAction.login ? 'Signed out' : 'Signed in',
-    newValue: action == AuditAction.login ? 'Signed in' : 'Signed out',
-    reason: '',
-    metadata: const {},
-    timestamp: now,
-  );
-  final existing = preferences.getStringList('admin_audit_logs') ?? <String>[];
-  await preferences.setStringList(
-    'admin_audit_logs',
-    [jsonEncode(_auditToMap(audit)), ...existing],
-  );
-}

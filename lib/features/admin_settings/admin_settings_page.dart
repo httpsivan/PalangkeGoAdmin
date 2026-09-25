@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/widgets/admin_widgets.dart';
-import '../../data/repositories/mock_repository.dart';
+import '../../data/repositories/auth_repository.dart';
 
 class AdminSettingsPage extends StatelessWidget {
   const AdminSettingsPage({super.key});

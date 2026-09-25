@@ -1,10 +1,12 @@
+import 'dart:ui' as ui;
+
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../data/repositories/mock_repository.dart';
-import '../animations/animated_widgets.dart';
+import '../../data/repositories/auth_repository.dart';
 import '../animations/app_motion.dart';
 import '../theme/theme_controller.dart';
 import 'admin_widgets.dart';
@@ -15,13 +17,13 @@ class AdminShell extends ConsumerWidget {
   const AdminShell({super.key, required this.child});
   final Widget child;
   static const navItems = [
-    ('Overview', '/overview', Icons.home_outlined),
-    ('Sales Reports', '/sales-reports', Icons.bar_chart_rounded),
-    ('Accounts', '/accounts', Icons.people_outline_rounded),
-    ('Stall Holder Application', '/applications', Icons.verified_user_outlined),
-    ('Renewal', '/renewal', Icons.autorenew_rounded),
-    ('Complaint', '/reports', Icons.report_problem_outlined),
-    ('Announcements', '/announcements', Icons.campaign_rounded),
+    ('Overview', 'Overview', '/overview', Icons.home_outlined),
+    ('Sales Reports', 'Sales Reports', '/sales-reports', Icons.bar_chart_rounded),
+    ('Accounts', 'Accounts', '/accounts', Icons.people_outline_rounded),
+    ('Stall Holder Application', 'Applications', '/applications', Icons.verified_user_outlined),
+    ('Renewal', 'Renewal', '/renewal', Icons.autorenew_rounded),
+    ('Complaint', 'Complaint', '/reports', Icons.report_problem_outlined),
+    ('Announcements', 'Announcements', '/announcements', Icons.campaign_rounded),
   ];
 
   @override
@@ -36,7 +38,7 @@ class AdminShell extends ConsumerWidget {
           children: [
             _TopNavigation(current: current),
             Expanded(
-              child: AnimatedPageSwitcher(route: current, child: child),
+              child: RepaintBoundary(child: child),
             ),
           ],
         ),
@@ -45,19 +47,32 @@ class AdminShell extends ConsumerWidget {
   }
 }
 
-class _TopNavigation extends ConsumerWidget {
+class _TopNavigation extends ConsumerStatefulWidget {
   const _TopNavigation({required this.current});
   final String current;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_TopNavigation> createState() => _TopNavigationState();
+}
+
+class _TopNavigationState extends ConsumerState<_TopNavigation> {
+  final _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final screenWidth = MediaQuery.sizeOf(context).width;
-    final compact = screenWidth < 1050;
-    final isPhone = screenWidth < 600;
-    final horizontalPad = Responsive.horizontalPadding(context);
+    final isMobile = screenWidth < 650;
+    final horizontalPad =
+        screenWidth < 1100 ? 12.0 : Responsive.horizontalPadding(context);
 
     return Container(
-      height: 76,
+      height: 72,
       padding: EdgeInsets.symmetric(horizontal: horizontalPad),
       decoration: BoxDecoration(
         color: semanticColors(context).heroBackground,
@@ -65,17 +80,17 @@ class _TopNavigation extends ConsumerWidget {
           bottom: BorderSide(color: semanticColors(context).borderOnHero),
         ),
       ),
-      child: compact
+      child: isMobile
           ? Row(
               children: [
                 Expanded(
                   child: Align(
                     alignment: Alignment.centerLeft,
-                    child: AppLogo(
+                    child: const AppLogo(
                       dark: true,
                       compact: true,
                       showTagline: false,
-                      showAdminBadge: !isPhone,
+                      showAdminBadge: false,
                     ),
                   ),
                 ),
@@ -102,37 +117,67 @@ class _TopNavigation extends ConsumerWidget {
             )
           : Row(
               children: [
-                const AppLogo(dark: true, showAdminBadge: true),
-                const SizedBox(width: 12),
+                AppLogo(
+                  dark: true,
+                  compact: screenWidth < 1400,
+                  showAdminBadge: screenWidth >= 1100,
+                  showTagline: screenWidth >= 1600,
+                ),
+                const SizedBox(width: 8),
                 Expanded(
-                  child: Center(
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          for (final item in AdminShell.navItems)
-                            _NavItem(
-                              label: item.$1,
-                              path: item.$2,
-                              icon: item.$3,
-                              active: current == item.$2,
-                            ),
-                        ],
+                  child: Listener(
+                    onPointerSignal: (pointerSignal) {
+                      if (pointerSignal is PointerScrollEvent &&
+                          _scrollController.hasClients) {
+                        final target = (_scrollController.offset +
+                                pointerSignal.scrollDelta.dy)
+                            .clamp(
+                                0.0,
+                                _scrollController
+                                    .position.maxScrollExtent);
+                        _scrollController.jumpTo(target);
+                      }
+                    },
+                    child: ScrollConfiguration(
+                      behavior: ScrollConfiguration.of(context).copyWith(
+                        dragDevices: {
+                          ui.PointerDeviceKind.touch,
+                          ui.PointerDeviceKind.mouse,
+                          ui.PointerDeviceKind.trackpad,
+                        },
+                        scrollbars: false,
+                      ),
+                      child: SingleChildScrollView(
+                        controller: _scrollController,
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            for (final item in AdminShell.navItems)
+                              _NavItem(
+                                label: item.$2,
+                                tooltip: item.$1,
+                                path: item.$3,
+                                icon: item.$4,
+                                active: widget.current == item.$3,
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     const _ThemeToggleButton(),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 4),
                     const NotificationBell(),
-                    const SizedBox(width: 10),
-                    const AdminProfileMenu(compact: false),
+                    const SizedBox(width: 8),
+                    AdminProfileMenu(compact: screenWidth < 1400),
                   ],
                 ),
               ],
@@ -141,90 +186,75 @@ class _TopNavigation extends ConsumerWidget {
   }
 }
 
-class _NavItem extends StatefulWidget {
+class _NavItem extends StatelessWidget {
   const _NavItem({
     required this.label,
     required this.path,
     required this.icon,
     required this.active,
+    this.tooltip,
   });
   final String label;
   final String path;
   final IconData icon;
   final bool active;
-
-  @override
-  State<_NavItem> createState() => _NavItemState();
-}
-
-class _NavItemState extends State<_NavItem> {
-  bool pressed = false;
+  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
     final colors = semanticColors(context);
     final activeColor =
-        widget.active ? colors.activeNavigationText : colors.heroMuted;
-    return Padding(
-      padding: const EdgeInsets.only(left: 5),
+        active ? colors.activeNavigationText : colors.heroMuted;
+
+    final itemWidget = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
-        child: AnimatedScale(
-          scale: pressed ? .97 : 1,
-          duration: AppMotion.duration(context, AppMotion.press),
-          curve: AppMotion.easeOut,
-          child: AnimatedContainer(
-            duration: AppMotion.duration(context, AppMotion.indicator),
-            curve: AppMotion.easeOut,
-            decoration: BoxDecoration(
-              color:
-                  widget.active ? colors.activeNavigation : Colors.transparent,
-              borderRadius: BorderRadius.circular(22),
-            ),
-            child: InkWell(
-              onTap: () => context.go(widget.path),
-              onTapDown: (_) => setState(() => pressed = true),
-              onTapUp: (_) => setState(() => pressed = false),
-              onTapCancel: () => setState(() => pressed = false),
-              borderRadius: BorderRadius.circular(22),
-              hoverColor: colors.navigationHover,
-              splashColor: colors.activeNavigation.withValues(alpha: .16),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TweenAnimationBuilder<Color?>(
-                      tween: ColorTween(end: activeColor),
-                      duration:
-                          AppMotion.duration(context, AppMotion.indicator),
-                      builder: (context, color, child) => Icon(
-                        widget.icon,
-                        size: 18,
-                        color: color,
-                      ),
+        child: Container(
+          decoration: BoxDecoration(
+            color: active ? colors.activeNavigation : Colors.transparent,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: InkWell(
+            onTap: () {
+              if (!active) {
+                context.go(path);
+              }
+            },
+            borderRadius: BorderRadius.circular(18),
+            hoverColor: colors.navigationHover,
+            splashColor: colors.activeNavigation.withValues(alpha: .16),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    icon,
+                    size: 16,
+                    color: activeColor,
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    label,
+                    style: GoogleFonts.inter(
+                      color: activeColor,
+                      fontSize: 13,
+                      fontWeight: active ? FontWeight.w700 : FontWeight.w500,
                     ),
-                    const SizedBox(width: 7),
-                    AnimatedDefaultTextStyle(
-                      duration:
-                          AppMotion.duration(context, AppMotion.indicator),
-                      curve: AppMotion.easeOut,
-                      style: GoogleFonts.inter(
-                        color: activeColor,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      child: Text(widget.label),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
         ),
       ),
     );
+
+    if (tooltip != null && tooltip != label) {
+      return Tooltip(message: tooltip!, child: itemWidget);
+    }
+    return itemWidget;
   }
 }
 
@@ -539,14 +569,16 @@ class _MobileDrawer extends ConsumerWidget {
               const Divider(),
               for (final item in AdminShell.navItems)
                 ListTile(
-                  leading: Icon(item.$3),
+                  leading: Icon(item.$4),
                   title: Text(item.$1),
-                  selected: current == item.$2,
+                  selected: current == item.$3,
                   selectedColor: semanticColors(context).heroBackground,
                   selectedTileColor: semanticColors(context).successContainer,
                   onTap: () {
                     Navigator.pop(context);
-                    context.go(item.$2);
+                    if (current != item.$3) {
+                      context.go(item.$3);
+                    }
                   },
                 ),
               const Spacer(),
