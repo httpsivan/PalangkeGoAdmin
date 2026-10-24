@@ -185,8 +185,6 @@ class _TopNavigationState extends ConsumerState<_TopNavigation> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    const _ThemeToggleButton(),
-                    const SizedBox(width: 4),
                     const NotificationBell(),
                     const SizedBox(width: 8),
                     AdminProfileMenu(compact: screenWidth < 1400),
@@ -264,47 +262,6 @@ class _NavItem extends StatelessWidget {
     );
 
     return itemWidget;
-  }
-}
-
-class _ThemeToggleButton extends ConsumerWidget {
-  const _ThemeToggleButton();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final colors = semanticColors(context);
-    return Tooltip(
-      message: dark ? 'Switch to light mode' : 'Switch to dark mode',
-      child: Material(
-        color: colors.navigationControl,
-        shape: const CircleBorder(),
-        child: InkWell(
-          onTap: () => ref
-              .read(themeModeProvider.notifier)
-              .toggleResolved(Theme.of(context).brightness),
-          hoverColor: colors.navigationHover,
-          customBorder: const CircleBorder(),
-          child: SizedBox(
-            width: 38,
-            height: 38,
-            child: AnimatedSwitcher(
-              duration: AppMotion.duration(context, AppMotion.component),
-              transitionBuilder: (child, animation) => RotationTransition(
-                turns: Tween<double>(begin: -.12, end: 0).animate(animation),
-                child: FadeTransition(opacity: animation, child: child),
-              ),
-              child: Icon(
-                dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-                key: ValueKey(dark),
-                color: colors.heroForeground,
-                size: 19,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }
 

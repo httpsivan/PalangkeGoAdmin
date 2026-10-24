@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../../data/repositories/mock_repository.dart';
 import '../../../models/admin_models.dart';
@@ -16,6 +17,40 @@ enum ExportFormat { pdf, excel, csv }
 
 class AdminExportService {
   AdminExportService._();
+
+  static final DateFormat _dateFormat = DateFormat('MMMM d, yyyy, h:mm a');
+
+  /// Formats an [ExportDocument] into structured tabular rows for CSV generation.
+  /// Follows the uniform report layout:
+  /// 1. Report title header
+  /// 2. Export timestamp
+  /// 3. Active filter criteria and date ranges
+  /// 4. Summary card key-value pairs (if present)
+  /// 5. Data table column headers followed by record rows
+  static List<List<Object?>> buildCsvRows(ExportDocument doc) {
+    final dateRangePart =
+        doc.header.dateRange != null && doc.header.dateRange!.isNotEmpty
+            ? 'Date Range: ${doc.header.dateRange} | '
+            : '';
+    final filterString = '$dateRangePart${doc.header.activeFilters}';
+
+    return <List<Object?>>[
+      ['PalengkeGo - ${doc.header.reportTitle}'],
+      ['Export Date: ${_dateFormat.format(doc.header.exportDate)}'],
+      ['Filters: $filterString'],
+      const <Object?>[],
+      if (doc.summary.items.isNotEmpty) ...[
+        const ['SUMMARY', 'COUNT / VALUE'],
+        ...doc.summary.items.map((item) {
+          final numVal = num.tryParse(item.value.replaceAll(',', ''));
+          return [item.label, numVal ?? item.value];
+        }),
+        const <Object?>[],
+      ],
+      doc.table.columns.map((c) => c.label).toList(),
+      ...doc.table.rows.map((r) => r.cells),
+    ];
+  }
 
   static Future<void> export({
     required BuildContext context,
@@ -38,10 +73,7 @@ class AdminExportService {
       mimeType = 'application/pdf';
       auditAction = AuditAction.exportPdf;
     } else if (format == ExportFormat.csv) {
-      final csvRows = <List<Object?>>[
-        doc.table.columns.map((c) => c.label).toList(),
-        ...doc.table.rows.map((r) => r.cells),
-      ];
+      final csvRows = buildCsvRows(doc);
       final csvString = buildCsv(csvRows);
       bytes = Uint8List.fromList(utf8.encode(csvString));
       filename = ExportFilenameService.generateFilename(

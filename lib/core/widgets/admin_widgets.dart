@@ -1173,7 +1173,7 @@ class ExportButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(10),
             side: BorderSide(color: colors.subtleBorder),
           ),
-          color: Colors.white,
+          color: colors.elevatedSurface,
           elevation: 6,
           onSelected: (action) {
             if (action == 'pdf') {
@@ -1226,13 +1226,13 @@ class ExportButton extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(5),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF0F4A3C).withValues(alpha: 0.1),
+                        color: const Color(0xFF10B981).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: const Icon(
                         Icons.table_view_outlined,
                         size: 16,
-                        color: Color(0xFF0F4A3C),
+                        color: Color(0xFF10B981),
                       ),
                     ),
                     const SizedBox(width: 10),

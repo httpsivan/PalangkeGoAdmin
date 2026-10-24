@@ -2253,7 +2253,7 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      'Inspect listed products, manage stock levels, and audit live inventory.',
+                                      'Inspect listed products and audit pricing for DTI compliance.',
                                       style: TextStyle(
                                         fontSize: 10,
                                         color: semanticColors(context).mutedText,
@@ -3029,6 +3029,8 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
   }
 
   Widget _footer(BuildContext context) {
+    final colors = semanticColors(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final isStallClosed = widget.account.accountType == 'Stall Holder' &&
         (widget.account.blockedReason?.toLowerCase().contains('stall closed') ==
                 true ||
@@ -3044,6 +3046,20 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
         widget.account.accountType == 'Stall Holder' &&
         widget.account.status != AccountStatus.blocked &&
         widget.account.closureRequestedAt == null;
+
+    // Theme-adaptive action button styling for high visibility and WCAG contrast.
+    // In dark mode, luminous semantic tokens prevent muddy/washed-out pastel fills and illegible dark text.
+    final warningFg = isDark ? colors.warning : const Color(0xFFD97706);
+    final warningBg = isDark
+        ? colors.warning.withValues(alpha: 0.16)
+        : const Color(0xFFFEF3C7).withValues(alpha: 0.55);
+    final warningBorder = isDark ? colors.warning : const Color(0xFFFBBF24);
+
+    final dangerFg = isDark ? colors.danger : const Color(0xFFDC2626);
+    final dangerBg = isDark
+        ? colors.danger.withValues(alpha: 0.16)
+        : const Color(0xFFFEE2E2).withValues(alpha: 0.55);
+    final dangerBorder = isDark ? colors.danger : const Color(0xFFF87171);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(22, 10, 22, 16),
@@ -3088,10 +3104,9 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
               child: OutlinedButton.icon(
                 onPressed: busy ? null : _liftSuspension,
                 style: OutlinedButton.styleFrom(
-                  backgroundColor:
-                      const Color(0xFFFEF3C7).withValues(alpha: 0.5),
-                  foregroundColor: const Color(0xFFD97706),
-                  side: const BorderSide(color: Color(0xFFFBBF24), width: 1.2),
+backgroundColor: warningBg,
+                  foregroundColor: warningFg,
+                  side: BorderSide(color: warningBorder, width: 1.2),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(22),
                   ),
@@ -3099,16 +3114,15 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
                 ),
                 icon: lifting
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: CircularProgressIndicator(strokeWidth: 2, color: warningFg),
                       )
-                    : const Icon(Icons.lock_open_rounded, size: 16),
+                    : Icon(Icons.lock_open_rounded, size: 16, color: warningFg),
                 label: Text(
                   lifting ? 'Lifting...' : 'Lift',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 12),
+style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: warningFg),
                 ),
               ),
             ),
@@ -3117,10 +3131,9 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
               child: OutlinedButton.icon(
                 onPressed: busy ? null : _suspend,
                 style: OutlinedButton.styleFrom(
-                  backgroundColor:
-                      const Color(0xFFFEF3C7).withValues(alpha: 0.55),
-                  foregroundColor: const Color(0xFFD97706),
-                  side: const BorderSide(color: Color(0xFFFBBF24), width: 1.2),
+backgroundColor: warningBg,
+                  foregroundColor: warningFg,
+                  side: BorderSide(color: warningBorder, width: 1.2),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(22),
                   ),
@@ -3128,17 +3141,15 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
                 ),
                 icon: suspending
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: CircularProgressIndicator(strokeWidth: 2, color: warningFg),
                       )
-                    : const Icon(Icons.pause_circle_outline,
-                        size: 16, color: Color(0xFFD97706)),
+                    : Icon(Icons.pause_circle_outline, size: 16, color: warningFg),
                 label: Text(
                   suspending ? 'Suspending...' : 'Suspend',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 12),
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: warningFg),
                 ),
               ),
             ),
@@ -3149,10 +3160,9 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
               child: OutlinedButton.icon(
                 onPressed: busy ? null : _block,
                 style: OutlinedButton.styleFrom(
-                  backgroundColor:
-                      const Color(0xFFFEE2E2).withValues(alpha: 0.55),
-                  foregroundColor: const Color(0xFFDC2626),
-                  side: const BorderSide(color: Color(0xFFF87171), width: 1.2),
+backgroundColor: dangerBg,
+                  foregroundColor: dangerFg,
+                  side: BorderSide(color: dangerBorder, width: 1.2),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(22),
                   ),
@@ -3160,17 +3170,15 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
                 ),
                 icon: blocking
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: CircularProgressIndicator(strokeWidth: 2, color: dangerFg),
                       )
-                    : const Icon(Icons.block_outlined,
-                        size: 16, color: Color(0xFFDC2626)),
+                    : Icon(Icons.block_outlined, size: 16, color: dangerFg),
                 label: Text(
                   blocking ? 'Blocking...' : 'Block',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 12),
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: dangerFg),
                 ),
               ),
             ),

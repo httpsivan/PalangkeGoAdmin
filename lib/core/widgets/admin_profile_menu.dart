@@ -285,22 +285,6 @@ class _AdminProfileDropdown extends ConsumerWidget {
                 height: 1,
                 color: theme.dividerColor.withValues(alpha: .65),
               ),
-              _ProfileMenuItem(
-                icon: isDark
-                    ? Icons.light_mode_outlined
-                    : Icons.dark_mode_outlined,
-                label: isDark ? 'Switch to light mode' : 'Switch to dark mode',
-                onTap: () {
-                  ref
-                      .read(themeModeProvider.notifier)
-                      .toggleResolved(theme.brightness);
-                  MenuController.maybeOf(context)?.close();
-                },
-              ),
-              Divider(
-                height: 1,
-                color: theme.dividerColor.withValues(alpha: .65),
-              ),
             ],
             _ProfileMenuItem(
               icon: Icons.history_rounded,
@@ -322,6 +306,33 @@ class _AdminProfileDropdown extends ConsumerWidget {
             ),
             Divider(
                 height: 1, color: theme.dividerColor.withValues(alpha: .65)),
+            _ProfileMenuItem(
+              icon: isDark
+                  ? Icons.dark_mode_rounded
+                  : Icons.dark_mode_outlined,
+              label: 'Dark mode',
+              trailing: SizedBox(
+                height: 20,
+                width: 36,
+                child: FittedBox(
+                  fit: BoxFit.contain,
+                  child: Switch(
+                    value: isDark,
+                    onChanged: (_) {
+                      ref
+                          .read(themeModeProvider.notifier)
+                          .toggleResolved(theme.brightness);
+                    },
+                  ),
+                ),
+              ),
+              onTap: () {
+                ref
+                    .read(themeModeProvider.notifier)
+                    .toggleResolved(theme.brightness);
+              },
+            ),
+            Divider(height: 1, color: theme.dividerColor.withValues(alpha: .65)),
             _ProfileMenuItem(
               icon: Icons.logout_rounded,
               label: 'Log out',
@@ -347,6 +358,7 @@ class _ProfileMenuItem extends StatefulWidget {
     required this.onTap,
     this.foregroundColor,
     this.hoverColor,
+    this.trailing,
   });
 
   final IconData icon;
@@ -354,6 +366,7 @@ class _ProfileMenuItem extends StatefulWidget {
   final VoidCallback onTap;
   final Color? foregroundColor;
   final Color? hoverColor;
+  final Widget? trailing;
 
   @override
   State<_ProfileMenuItem> createState() => _ProfileMenuItemState();
@@ -403,6 +416,7 @@ class _ProfileMenuItemState extends State<_ProfileMenuItem> {
                       ),
                     ),
                   ),
+                  if (widget.trailing != null) widget.trailing!,
                 ],
               ),
             ),

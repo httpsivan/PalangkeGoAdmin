@@ -37,7 +37,7 @@ class ExcelReportService {
         '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <sheets>
-    <sheet name="${_xml(doc.reportName)}" sheetId="1" r:id="rId1"/>
+    <sheet name="${_xml(_sanitizeSheetName(doc.reportName))}" sheetId="1" r:id="rId1"/>
   </sheets>
 </workbook>''',
       ),
@@ -254,6 +254,21 @@ class ExcelReportService {
     buffer.writeln('</sheetData>');
     buffer.writeln('</worksheet>');
     return buffer.toString();
+  }
+
+  /// Sanitizes sheet names to satisfy Microsoft Excel / OpenXML constraints:
+  /// - Maximum length of 31 characters.
+  /// - Forbidden characters `\ / ? * : [ ]` replaced with spaces.
+  /// - Leading/trailing apostrophes stripped.
+  /// - Falls back to `'Sheet1'` if sanitized string is empty.
+  /// Prevents the "We found a problem with some content..." recovery error in Excel.
+  static String _sanitizeSheetName(String name) {
+    var s = name.replaceAll(RegExp(r'[\\/?*:[\]]'), ' ').trim();
+    if (s.length > 31) {
+      s = s.substring(0, 31).trim();
+    }
+    s = s.replaceAll(RegExp(r"^'+|'+$"), '').trim();
+    return s.isEmpty ? 'Sheet1' : s;
   }
 
   static String _xml(String value) =>

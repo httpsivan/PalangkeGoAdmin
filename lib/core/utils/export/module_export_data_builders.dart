@@ -874,8 +874,14 @@ class StallAuditExportData {
     final lowStockCount = allProducts.where((p) => p.isLowStock).length;
     final outOfStockCount = allProducts.where((p) => p.isOutOfStock).length;
 
+    final stallLocation =
+        vendor.location.isNotEmpty ? vendor.location : 'Not Assigned';
+
+    // Summary card prominently displays vendor name, stall category, and location at the top,
+    // avoiding redundant repetitive location columns across individual product rows.
     final summary = ReportSummary(
-      title: 'AUDIT SUMMARY • ${vendor.name} (${vendor.stallType})',
+      title:
+          'AUDIT SUMMARY • ${vendor.name} (${vendor.stallType} • $stallLocation)',
       items: [
         ReportSummaryItem(
           label: 'Total Listed',
@@ -900,6 +906,7 @@ class StallAuditExportData {
       ],
     );
 
+    // Stall audit columns (Stall Location is consolidated in the top summary header).
     final columns = const [
       ReportColumn(label: 'Product Name', flex: 1.8),
       ReportColumn(label: 'Category', flex: 1.0),
@@ -907,7 +914,6 @@ class StallAuditExportData {
       ReportColumn(label: 'Live Stock', flex: 1.1, isNumeric: true),
       ReportColumn(label: 'Stock Status', flex: 1.0),
       ReportColumn(label: 'Date Added', flex: 1.2),
-      ReportColumn(label: 'Stall Location', flex: 1.2),
     ];
 
     final currencyFormat = NumberFormat('#,##0.00');
@@ -939,7 +945,6 @@ class StallAuditExportData {
           '$stockQtyStr ${p.unit}',
           stockStatus,
           DateFormat('yyyy-MM-dd HH:mm').format(p.dateAdded),
-          vendor.location.isNotEmpty ? vendor.location : vendor.stallType,
         ],
       );
     }).toList();
@@ -950,9 +955,9 @@ class StallAuditExportData {
 
     return ExportDocument(
       filenamePrefix: filenamePrefix,
-      reportName: 'Stall Inventory Audit - ${vendor.name}',
+      reportName: 'Audit - ${vendor.name}',
       header: ReportHeader(
-        reportTitle: 'Stall Holder Product Listing & Price Audit Sheet',
+        reportTitle: 'Stall Products & Inventory Audit Report',
         exportDate: now,
         activeFilters: activeFilters,
       ),

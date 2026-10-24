@@ -129,6 +129,7 @@ class _StallProductsAuditViewState
     AppSemanticColors colors,
     List<StallProduct> filteredProducts,
   ) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.fromLTRB(22, 16, 16, 16),
       color: colors.heroBackground,
@@ -191,13 +192,15 @@ class _StallProductsAuditViewState
               ],
             ),
           ),
+          // Export button for audit sheets: provides formatted PDF and styled Excel (.xlsx) reports.
+          // Note: CSV export is omitted here in favor of Excel to preserve audit summary colors and styling.
           ExportButton(
             label: 'Export Audit Sheet',
-            backgroundColor: Colors.white,
-            foregroundColor: colors.heroBackground,
-            borderColor: Colors.white,
+            backgroundColor: isDark ? colors.cardBackground : Colors.white,
+            foregroundColor: isDark ? colors.primaryText : colors.heroBackground,
+            borderColor: isDark ? colors.subtleBorder : Colors.white,
             onExportPdf: () => _exportAudit(ExportFormat.pdf, filteredProducts),
-            onExportCsv: () => _exportAudit(ExportFormat.csv, filteredProducts),
+            onExportExcel: () => _exportAudit(ExportFormat.excel, filteredProducts),
           ),
           const SizedBox(width: 8),
           IconButton(
@@ -252,6 +255,7 @@ class _StallProductsAuditViewState
     required int lowStockCount,
     required int outOfStockCount,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
       decoration: BoxDecoration(
@@ -263,8 +267,9 @@ class _StallProductsAuditViewState
           _metricCard(
             label: 'TOTAL LISTED',
             value: '$totalListed items',
-            accent: const Color(0xFF0F4A3C),
+            accent: isDark ? const Color(0xFF34D399) : const Color(0xFF0F4A3C),
             icon: Icons.inventory_2_outlined,
+            colors: colors,
           ),
           const SizedBox(width: 12),
           _metricCard(
@@ -272,6 +277,7 @@ class _StallProductsAuditViewState
             value: '$inStockCount items',
             accent: const Color(0xFF10B981),
             icon: Icons.check_circle_outline_rounded,
+            colors: colors,
           ),
           const SizedBox(width: 12),
           _metricCard(
@@ -279,6 +285,7 @@ class _StallProductsAuditViewState
             value: '$lowStockCount items',
             accent: const Color(0xFFF59E0B),
             icon: Icons.warning_amber_rounded,
+            colors: colors,
           ),
           const SizedBox(width: 12),
           _metricCard(
@@ -286,6 +293,7 @@ class _StallProductsAuditViewState
             value: '$outOfStockCount items',
             accent: const Color(0xFFEF4444),
             icon: Icons.remove_circle_outline_rounded,
+            colors: colors,
           ),
         ],
       ),
@@ -297,6 +305,7 @@ class _StallProductsAuditViewState
     required String value,
     required Color accent,
     required IconData icon,
+    required AppSemanticColors colors,
   }) {
     return Expanded(
       child: Container(
@@ -326,9 +335,10 @@ class _StallProductsAuditViewState
                 const SizedBox(height: 2),
                 Text(
                   value,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
+                    color: colors.primaryText,
                   ),
                 ),
               ],
@@ -353,14 +363,29 @@ class _StallProductsAuditViewState
               child: TextField(
                 controller: _searchController,
                 onChanged: (_) => setState(() {}),
-                style: const TextStyle(fontSize: 12),
+                style: TextStyle(fontSize: 12, color: colors.primaryText),
                 decoration: InputDecoration(
                   hintText: 'Search products by name...',
-                  prefixIcon: const Icon(Icons.search, size: 18),
+                  hintStyle: TextStyle(fontSize: 12, color: colors.mutedText),
+                  prefixIcon: Icon(Icons.search, size: 18, color: colors.mutedText),
+                  filled: true,
+                  fillColor: colors.cardBackground,
                   contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: colors.subtleBorder),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: colors.subtleBorder),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: colors.accent),
+                  ),
                   suffixIcon: _searchController.text.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.clear, size: 16),
+                          icon: Icon(Icons.clear, size: 16, color: colors.mutedText),
                           onPressed: () {
                             _searchController.clear();
                             setState(() {});
@@ -372,40 +397,12 @@ class _StallProductsAuditViewState
             ),
           ),
           const SizedBox(width: 10),
-          _dropdownFilter(
-            value: _selectedStock,
-            items: const ['All Stock Statuses', 'In Stock Only', 'Low Stock', 'Sold Out'],
-            onChanged: (v) => setState(() => _selectedStock = v ?? 'All Stock Statuses'),
+          FilterMenuButton(
+            label: _selectedStock,
+            values: const ['All Stock Statuses', 'In Stock Only', 'Low Stock', 'Sold Out'],
+            onSelected: (v) => setState(() => _selectedStock = v),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _dropdownFilter({
-    required String value,
-    required List<String> items,
-    required ValueChanged<String?> onChanged,
-  }) {
-    return Container(
-      height: 38,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: items.contains(value) ? value : items.first,
-          items: items
-              .map((c) => DropdownMenuItem(
-                    value: c,
-                    child: Text(c, style: const TextStyle(fontSize: 11.5)),
-                  ))
-              .toList(),
-          onChanged: onChanged,
-        ),
       ),
     );
   }
@@ -491,9 +488,10 @@ class _StallProductsAuditViewState
                             Flexible(
                               child: Text(
                                 p.name,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 12.5,
                                   fontWeight: FontWeight.bold,
+                                  color: colors.primaryText,
                                 ),
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -534,9 +532,10 @@ class _StallProductsAuditViewState
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   child: Text(
                     '${currencyFormat.format(p.price)} / ${p.unit}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
+                      color: colors.primaryText,
                     ),
                   ),
                 ),
@@ -554,10 +553,10 @@ class _StallProductsAuditViewState
                           fontSize: 11.5,
                           fontWeight: FontWeight.bold,
                           color: p.isOutOfStock
-                              ? const Color(0xFFDC2626)
+                              ? const Color(0xFFEF4444)
                               : p.isLowStock
-                                  ? const Color(0xFFD97706)
-                                  : const Color(0xFF059669),
+                                  ? const Color(0xFFF59E0B)
+                                  : const Color(0xFF10B981),
                         ),
                       ),
                       const SizedBox(height: 1),
@@ -571,10 +570,10 @@ class _StallProductsAuditViewState
                           fontSize: 8.5,
                           fontWeight: FontWeight.w700,
                           color: p.isOutOfStock
-                              ? const Color(0xFFDC2626)
+                              ? const Color(0xFFEF4444)
                               : p.isLowStock
-                                  ? const Color(0xFFD97706)
-                                  : const Color(0xFF059669),
+                                  ? const Color(0xFFF59E0B)
+                                  : const Color(0xFF10B981),
                         ),
                       ),
                     ],
@@ -590,9 +589,10 @@ class _StallProductsAuditViewState
                     children: [
                       Text(
                         DateFormat('MMM dd, yyyy').format(p.dateAdded),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11.5,
                           fontWeight: FontWeight.w600,
+                          color: colors.primaryText,
                         ),
                       ),
                       const SizedBox(height: 1),
@@ -826,7 +826,7 @@ class _StallProductsAuditViewState
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: colors.hoverSurface,
+        color: colors.cardBackground,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: colors.subtleBorder),
       ),
@@ -853,9 +853,10 @@ class _StallProductsAuditViewState
                     Flexible(
                       child: Text(
                         value,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
+                          color: colors.primaryText,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -892,6 +893,7 @@ class _StallProductsAuditViewState
   void _showSendWarningDialog(BuildContext context, StallProduct p) {
     final colors = semanticColors(context);
     final currencyFormat = NumberFormat.currency(symbol: '₱', decimalDigits: 2);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final messageController = TextEditingController(
       text:
           'Notice regarding "${p.name}" (Current Stall Price: ${currencyFormat.format(p.price)} / ${p.unit}): In accordance with weekly Monday DTI Suggested Retail Price (SRP) monitoring, please review and adjust your pricing to ensure compliance.',
@@ -901,6 +903,7 @@ class _StallProductsAuditViewState
       context: context,
       builder: (dialogCtx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        backgroundColor: colors.elevatedSurface,
         title: Row(
           children: [
             Container(
@@ -912,18 +915,18 @@ class _StallProductsAuditViewState
               child: Icon(Icons.warning_amber_rounded, size: 20, color: colors.warning),
             ),
             const SizedBox(width: 12),
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     'Send Price Warning',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: colors.primaryText),
                   ),
                   Text(
                     'DTI Weekly Price Audit • Monday Verification',
-                    style: TextStyle(fontSize: 11, color: Colors.grey),
+                    style: TextStyle(fontSize: 11, color: colors.mutedText),
                   ),
                 ],
               ),
@@ -939,7 +942,7 @@ class _StallProductsAuditViewState
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: colors.hoverSurface,
+                  color: colors.cardBackground,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: colors.subtleBorder),
                 ),
@@ -958,9 +961,10 @@ class _StallProductsAuditViewState
                         ),
                         Text(
                           widget.vendor.name,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
+                            color: colors.primaryText,
                           ),
                         ),
                         if (widget.vendor.location.isNotEmpty) ...[
@@ -987,9 +991,10 @@ class _StallProductsAuditViewState
                         ),
                         Text(
                           p.name,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
+                            color: colors.primaryText,
                           ),
                         ),
                         const Spacer(),
@@ -998,7 +1003,7 @@ class _StallProductsAuditViewState
                           style: TextStyle(
                             fontSize: 11.5,
                             fontWeight: FontWeight.bold,
-                            color: colors.heroBackground,
+                            color: isDark ? const Color(0xFF34D399) : colors.heroBackground,
                           ),
                         ),
                       ],
@@ -1007,19 +1012,33 @@ class _StallProductsAuditViewState
                 ),
               ),
               const SizedBox(height: 14),
-              const Text(
+              Text(
                 'Warning Notice Message',
-                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: colors.primaryText),
               ),
               const SizedBox(height: 6),
               TextField(
                 controller: messageController,
                 maxLines: 4,
-                style: const TextStyle(fontSize: 12),
-                decoration: const InputDecoration(
+                style: TextStyle(fontSize: 12, color: colors.primaryText),
+                decoration: InputDecoration(
                   hintText: 'Enter price compliance warning message...',
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.all(10),
+                  hintStyle: TextStyle(fontSize: 12, color: colors.mutedText),
+                  filled: true,
+                  fillColor: colors.cardBackground,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: colors.subtleBorder),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: colors.subtleBorder),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: colors.accent),
+                  ),
+                  contentPadding: const EdgeInsets.all(10),
                 ),
               ),
             ],
@@ -1098,16 +1117,17 @@ class _HeaderCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = semanticColors(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
       child: Text(
         title,
         textAlign: alignRight ? TextAlign.right : TextAlign.left,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w700,
           letterSpacing: 0.5,
-          color: Color(0xFF64748B),
+          color: colors.mutedText,
         ),
       ),
     );
