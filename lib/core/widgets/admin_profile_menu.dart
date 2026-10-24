@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../data/repositories/auth_repository.dart';
+import '../../data/repositories/admin_messaging_repository.dart';
 import '../../data/repositories/notification_repository.dart';
 import '../../features/admin_settings/admin_settings_page.dart';
 import '../theme/theme_controller.dart';
@@ -219,6 +220,7 @@ class _AdminProfileDropdown extends ConsumerWidget {
         .watch(notificationProvider)
         .where((notification) => !notification.isRead)
         .length;
+    final unreadMessages = ref.watch(adminUnreadMessagesCountProvider);
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: Material(
@@ -272,6 +274,20 @@ class _AdminProfileDropdown extends ConsumerWidget {
                 height: 1, color: theme.dividerColor.withValues(alpha: .65)),
             // Mobile header controls live here to keep the logo centered.
             if (showMobileActions) ...[
+              _ProfileMenuItem(
+                icon: Icons.chat_bubble_outline_rounded,
+                label: unreadMessages == 0
+                    ? 'Messages'
+                    : 'Messages ($unreadMessages)',
+                onTap: () {
+                  MenuController.maybeOf(context)?.close();
+                  context.go('/messages');
+                },
+              ),
+              Divider(
+                height: 1,
+                color: theme.dividerColor.withValues(alpha: .65),
+              ),
               _ProfileMenuItem(
                 icon: Icons.notifications_none_rounded,
                 label:

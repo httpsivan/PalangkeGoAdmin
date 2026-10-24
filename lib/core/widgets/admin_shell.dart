@@ -11,6 +11,7 @@ import '../animations/app_motion.dart';
 import '../theme/theme_controller.dart';
 import 'admin_widgets.dart';
 import 'admin_profile_menu.dart';
+import 'messages_bell.dart';
 import 'notification_panel.dart';
 
 class AdminShell extends ConsumerWidget {
@@ -185,6 +186,8 @@ class _TopNavigationState extends ConsumerState<_TopNavigation> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
+                    const MessagesBell(),
+                    const SizedBox(width: 8),
                     const NotificationBell(),
                     const SizedBox(width: 8),
                     AdminProfileMenu(compact: screenWidth < 1400),
