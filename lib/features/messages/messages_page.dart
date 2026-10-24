@@ -437,7 +437,7 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Customer: ${conv.customerName} • Inquiry Type: ${conv.inquiryType.toUpperCase()}',
+                      'Customer: ${conv.customerName}',
                       style: TextStyle(fontSize: 11.5, color: colors.mutedText),
                     ),
                   ],

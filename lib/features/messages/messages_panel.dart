@@ -455,8 +455,6 @@ class _MessagesPanelState extends ConsumerState<MessagesPanel>
                   ],
                 ),
               ),
-              _InquiryBadge(type: conv.inquiryType),
-              const SizedBox(width: 6),
               IconButton(
                 icon: Icon(Icons.close_rounded, size: 20, color: colors.secondaryText),
                 onPressed: _close,
@@ -638,15 +636,9 @@ class _ConversationTile extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      Text(
-                        '👤 ${conversation.customerName}',
-                        style: TextStyle(fontSize: 10.5, color: colors.secondaryText, fontWeight: FontWeight.w500),
-                      ),
-                      const SizedBox(width: 6),
-                      _InquiryBadge(type: conversation.inquiryType),
-                    ],
+                  Text(
+                    '👤 ${conversation.customerName}',
+                    style: TextStyle(fontSize: 10.5, color: colors.secondaryText, fontWeight: FontWeight.w500),
                   ),
                   const SizedBox(height: 3),
                   Row(
@@ -875,49 +867,6 @@ class _AvatarSmall extends StatelessWidget {
             color: colors.accent,
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _InquiryBadge extends StatelessWidget {
-  const _InquiryBadge({required this.type});
-
-  final String type;
-
-  @override
-  Widget build(BuildContext context) {
-    Color bg;
-    Color fg;
-    final label = type.toUpperCase();
-
-    switch (type.toLowerCase()) {
-      case 'product':
-        bg = const Color(0xFF10B981).withValues(alpha: .15);
-        fg = const Color(0xFF059669);
-        break;
-      case 'order':
-        bg = const Color(0xFF3B82F6).withValues(alpha: .15);
-        fg = const Color(0xFF2563EB);
-        break;
-      case 'delivery':
-        bg = const Color(0xFFF59E0B).withValues(alpha: .15);
-        fg = const Color(0xFFD97706);
-        break;
-      default:
-        bg = Colors.grey.withValues(alpha: .15);
-        fg = Colors.grey.shade700;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(fontSize: 8.5, fontWeight: FontWeight.w700, color: fg),
       ),
     );
   }
