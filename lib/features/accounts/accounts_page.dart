@@ -11,6 +11,7 @@ import '../../core/widgets/admin_widgets.dart';
 import '../../data/repositories/mock_repository.dart';
 import '../../models/admin_models.dart';
 import '../../models/app_models.dart';
+import 'stall_products_dialog.dart';
 
 String _accountRevenue(num? value) {
   final amount = value ?? 0;
@@ -692,9 +693,20 @@ class _VendorTable extends StatelessWidget {
                               ),
               ),
               DataCell(
-                IconButton(
-                  onPressed: () => onOpen(vendor),
-                  icon: const Icon(Icons.open_in_new_rounded, size: 15),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      onPressed: () => showStallProductsDialog(context, vendor: vendor),
+                      icon: const Icon(Icons.inventory_2_outlined, size: 16),
+                      tooltip: 'View Stall Products & Inventory',
+                    ),
+                    IconButton(
+                      onPressed: () => onOpen(vendor),
+                      icon: const Icon(Icons.open_in_new_rounded, size: 15),
+                      tooltip: 'Open Account Details',
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -796,6 +808,8 @@ class _CustomerTable extends StatelessWidget {
                 IconButton(
                   onPressed: () => onOpen(customer),
                   icon: const Icon(Icons.open_in_new_rounded, size: 15),
+
+
                   tooltip: 'Open account details',
                 ),
               ),
@@ -2203,6 +2217,93 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
                           ],
                         ],
                       ),
+                      const SizedBox(height: 21),
+                      if (widget.account.accountType == 'Stall Holder') ...[
+                        const SizedBox(height: 14),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: semanticColors(context).infoContainer.withValues(alpha: 0.35),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: semanticColors(context).info.withValues(alpha: 0.3)),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 38,
+                                height: 38,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF0F4A3C),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(Icons.inventory_2_outlined, color: Colors.white, size: 20),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Stall Products & Inventory Audit',
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Inspect listed products, manage stock levels, and audit live inventory.',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: semanticColors(context).mutedText,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF0F4A3C),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                                onPressed: () {
+                                  final vendor = ref
+                                      .read(appDataProvider)
+                                      .vendors
+                                      .firstWhere(
+                                        (v) => v.id == widget.account.id,
+                                        orElse: () => Vendor(
+                                          id: widget.account.id,
+                                          name: widget.account.name,
+                                          email: widget.account.email,
+                                          stallType: widget.account.stallType,
+                                          registeredAt: widget.account.registeredAt,
+                                          status: widget.account.status,
+                                          location: widget.account.location,
+                                          orders: widget.account.orders,
+                                          transactions: widget.account.transactions,
+                                          phone: widget.account.phone,
+                                          residence: widget.account.residence,
+                                        ),
+                                      );
+                                  showStallProductsDialog(context, vendor: vendor);
+                                },
+                                icon: const Icon(Icons.arrow_forward_rounded, size: 14),
+                                label: const Text(
+                                  'View Catalog',
+                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 21),
                       _sectionTitle('CONTACT INFORMATION'),
                       const SizedBox(height: 10),

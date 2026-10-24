@@ -1088,6 +1088,7 @@ class ExportButton extends StatelessWidget {
     this.onTap,
     this.onExportPdf,
     this.onExportExcel,
+    this.onExportCsv,
     this.tooltip = 'Export data',
     this.backgroundColor,
     this.foregroundColor,
@@ -1099,6 +1100,7 @@ class ExportButton extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onExportPdf;
   final VoidCallback? onExportExcel;
+  final VoidCallback? onExportCsv;
   final String tooltip;
   final Color? backgroundColor;
   final Color? foregroundColor;
@@ -1107,7 +1109,7 @@ class ExportButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = semanticColors(context);
-    final hasMenu = onExportPdf != null || onExportExcel != null;
+    final hasMenu = onExportPdf != null || onExportExcel != null || onExportCsv != null;
     final isEnabled = hasMenu || onTap != null;
 
     final effectiveFg = foregroundColor ??
@@ -1178,68 +1180,105 @@ class ExportButton extends StatelessWidget {
               onExportPdf?.call();
             } else if (action == 'excel') {
               onExportExcel?.call();
+            } else if (action == 'csv') {
+              onExportCsv?.call();
             }
           },
           itemBuilder: (context) => [
-            PopupMenuItem(
-              value: 'pdf',
-              height: 40,
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(5),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEF4444).withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(6),
+            if (onExportPdf != null)
+              PopupMenuItem(
+                value: 'pdf',
+                height: 40,
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEF4444).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Icon(
+                        Icons.picture_as_pdf_outlined,
+                        size: 16,
+                        color: Color(0xFFEF4444),
+                      ),
                     ),
-                    child: const Icon(
-                      Icons.picture_as_pdf_outlined,
-                      size: 16,
-                      color: Color(0xFFEF4444),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Export PDF',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: colors.primaryText,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    'Export PDF',
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                      color: colors.primaryText,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            const PopupMenuDivider(height: 1),
-            PopupMenuItem(
-              value: 'excel',
-              height: 40,
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(5),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF10B981).withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(6),
+            if (onExportPdf != null && (onExportCsv != null || onExportExcel != null))
+              const PopupMenuDivider(height: 1),
+            if (onExportCsv != null)
+              PopupMenuItem(
+                value: 'csv',
+                height: 40,
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F4A3C).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Icon(
+                        Icons.table_view_outlined,
+                        size: 16,
+                        color: Color(0xFF0F4A3C),
+                      ),
                     ),
-                    child: const Icon(
-                      Icons.table_chart_outlined,
-                      size: 16,
-                      color: Color(0xFF10B981),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Export CSV',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: colors.primaryText,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    'Export Excel',
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                      color: colors.primaryText,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
+            if (onExportCsv != null && onExportExcel != null)
+              const PopupMenuDivider(height: 1),
+            if (onExportExcel != null)
+              PopupMenuItem(
+                value: 'excel',
+                height: 40,
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Icon(
+                        Icons.table_chart_outlined,
+                        size: 16,
+                        color: Color(0xFF10B981),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Export Excel',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: colors.primaryText,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
           ],
           child: IgnorePointer(
             child: buttonChild,

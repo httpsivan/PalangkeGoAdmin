@@ -1,16 +1,18 @@
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/repositories/mock_repository.dart';
 import '../../../models/admin_models.dart';
+import '../csv_exporter.dart';
 import '../platform_file_saver.dart';
 import 'admin_export_models.dart';
 import 'excel_report_service.dart';
 import 'export_filename_service.dart';
 import 'pdf_report_service.dart';
 
-enum ExportFormat { pdf, excel }
+enum ExportFormat { pdf, excel, csv }
 
 class AdminExportService {
   AdminExportService._();
@@ -35,6 +37,20 @@ class AdminExportService {
       );
       mimeType = 'application/pdf';
       auditAction = AuditAction.exportPdf;
+    } else if (format == ExportFormat.csv) {
+      final csvRows = <List<Object?>>[
+        doc.table.columns.map((c) => c.label).toList(),
+        ...doc.table.rows.map((r) => r.cells),
+      ];
+      final csvString = buildCsv(csvRows);
+      bytes = Uint8List.fromList(utf8.encode(csvString));
+      filename = ExportFilenameService.generateFilename(
+        prefix: doc.filenamePrefix,
+        extension: 'csv',
+        timestamp: doc.header.exportDate,
+      );
+      mimeType = 'text/csv;charset=utf-8';
+      auditAction = AuditAction.exportExcel;
     } else {
       bytes = ExcelReportService.generateExcel(doc);
       filename = ExportFilenameService.generateFilename(
@@ -65,7 +81,11 @@ class AdminExportService {
         );
 
     if (context.mounted) {
-      final formatLabel = format == ExportFormat.pdf ? 'PDF' : 'Excel';
+      final formatLabel = switch (format) {
+        ExportFormat.pdf => 'PDF',
+        ExportFormat.csv => 'CSV',
+        ExportFormat.excel => 'Excel',
+      };
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

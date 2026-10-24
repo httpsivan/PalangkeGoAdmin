@@ -12,6 +12,7 @@ import '../../features/announcements/announcement_history_page.dart';
 import '../../features/notifications/notifications_page.dart';
 import '../../features/reports/reports_page.dart';
 import '../../features/sales_reports/sales_reports_page.dart';
+import '../../features/onboarding/onboarding_screen.dart';
 import '../../features/renewals/renewals_page.dart';
 import '../../features/vendor_applications/vendor_applications_page.dart';
 import '../widgets/admin_shell.dart';
@@ -24,12 +25,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final signedIn = ref.read(authProvider);
       final isLogin = state.matchedLocation == '/login';
-      if (!signedIn && !isLogin) return '/login';
+      final isOnboarding = state.matchedLocation == '/onboarding';
+      if (!signedIn && !isLogin && !isOnboarding) return '/login';
       if (signedIn && isLogin) return '/overview';
       return null;
     },
     routes: [
       GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
+      GoRoute(
+        path: '/onboarding',
+        builder: (context, state) => const OnboardingScreen(),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
             AdminShell(child: navigationShell),

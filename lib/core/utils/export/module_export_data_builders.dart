@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../../../models/admin_models.dart';
 import '../../../models/app_models.dart';
+import '../../../models/stall_product.dart';
 import 'admin_export_models.dart';
 import 'export_filename_service.dart';
 
@@ -851,6 +852,111 @@ class SalesExportData {
         activeFilters: activeFilters,
       ),
       summary: reportSummary,
+      table: ReportTable(columns: columns, rows: rows),
+    );
+  }
+}
+
+class StallAuditExportData {
+  StallAuditExportData._();
+
+  static ExportDocument build({
+    required Vendor vendor,
+    required List<StallProduct> allProducts,
+    required List<StallProduct> filteredProducts,
+    required String activeFilters,
+    DateTime? exportDate,
+  }) {
+    final now = exportDate ?? DateTime.now();
+
+    final totalListed = allProducts.length;
+    final inStockCount = allProducts.where((p) => !p.isOutOfStock).length;
+    final lowStockCount = allProducts.where((p) => p.isLowStock).length;
+    final outOfStockCount = allProducts.where((p) => p.isOutOfStock).length;
+
+    final summary = ReportSummary(
+      title: 'AUDIT SUMMARY • ${vendor.name} (${vendor.stallType})',
+      items: [
+        ReportSummaryItem(
+          label: 'Total Listed',
+          value: '$totalListed items',
+          accent: const Color(0xFF0F4A3C),
+        ),
+        ReportSummaryItem(
+          label: 'In Stock',
+          value: '$inStockCount items',
+          accent: const Color(0xFF10B981),
+        ),
+        ReportSummaryItem(
+          label: 'Low Stock',
+          value: '$lowStockCount items',
+          accent: const Color(0xFFF59E0B),
+        ),
+        ReportSummaryItem(
+          label: 'Out of Stock',
+          value: '$outOfStockCount items',
+          accent: const Color(0xFFEF4444),
+        ),
+      ],
+    );
+
+    final columns = const [
+      ReportColumn(label: 'Product Name', flex: 1.8),
+      ReportColumn(label: 'Category', flex: 1.0),
+      ReportColumn(label: 'Stall Price', flex: 1.3, isNumeric: true),
+      ReportColumn(label: 'Live Stock', flex: 1.1, isNumeric: true),
+      ReportColumn(label: 'Stock Status', flex: 1.0),
+      ReportColumn(label: 'Date Added', flex: 1.2),
+      ReportColumn(label: 'Stall Location', flex: 1.2),
+    ];
+
+    final currencyFormat = NumberFormat('#,##0.00');
+
+    final rows = filteredProducts.map((p) {
+      Color? statusColor;
+      final String stockStatus;
+      if (p.isOutOfStock) {
+        statusColor = const Color(0xFFEF4444);
+        stockStatus = 'SOLD OUT';
+      } else if (p.isLowStock) {
+        statusColor = const Color(0xFFF59E0B);
+        stockStatus = 'LOW STOCK';
+      } else {
+        statusColor = const Color(0xFF10B981);
+        stockStatus = 'IN STOCK';
+      }
+
+      final stockQtyStr = p.stockQuantity % 1 == 0
+          ? '${p.stockQuantity.toInt()}'
+          : p.stockQuantity.toStringAsFixed(1);
+
+      return ReportRow(
+        statusColor: statusColor,
+        cells: [
+          p.name,
+          p.category,
+          'PHP ${currencyFormat.format(p.price)} / ${p.unit}',
+          '$stockQtyStr ${p.unit}',
+          stockStatus,
+          DateFormat('yyyy-MM-dd HH:mm').format(p.dateAdded),
+          vendor.location.isNotEmpty ? vendor.location : vendor.stallType,
+        ],
+      );
+    }).toList();
+
+    final safeVendorName =
+        vendor.name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_');
+    final filenamePrefix = 'palengkego_audit_$safeVendorName';
+
+    return ExportDocument(
+      filenamePrefix: filenamePrefix,
+      reportName: 'Stall Inventory Audit - ${vendor.name}',
+      header: ReportHeader(
+        reportTitle: 'Stall Holder Product Listing & Price Audit Sheet',
+        exportDate: now,
+        activeFilters: activeFilters,
+      ),
+      summary: summary,
       table: ReportTable(columns: columns, rows: rows),
     );
   }
