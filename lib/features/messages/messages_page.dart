@@ -292,7 +292,7 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _AvatarCircle(name: conv.stallName),
+                            _AvatarCircle(name: conv.displayStallName),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(
@@ -302,7 +302,7 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
                                     children: [
                                       Expanded(
                                         child: Text(
-                                          conv.stallName,
+                                          conv.displayStallName,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
@@ -418,14 +418,14 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
                 ),
                 const SizedBox(width: 8),
               ],
-              _AvatarCircle(name: conv.stallName),
+              _AvatarCircle(name: conv.displayStallName),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      conv.stallName,
+                      conv.displayStallName,
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,

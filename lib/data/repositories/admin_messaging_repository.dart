@@ -65,8 +65,8 @@ class AdminMessagingRepository {
   final SupabaseClient? _client;
   final SharedPreferences _preferences;
 
-  static const _conversationsKey = 'mock_chat_conversations_v2';
-  static const _messagesKey = 'mock_chat_messages_v2';
+  static const _conversationsKey = 'mock_chat_conversations_v3';
+  static const _messagesKey = 'mock_chat_messages_v3';
 
   final List<ChatConversation> _localConversations = [];
   final Map<String, List<ChatMessage>> _localMessages = {};
@@ -337,7 +337,7 @@ class AdminMessagingRepository {
     final conv1 = ChatConversation(
       id: 'conv_omar_rivera_admin',
       stallId: 'VND-92858',
-      stallName: 'Omar Rivera (SARI-SARI)',
+      stallName: 'Omar Rivera (Sari-sari)',
       customerUid: 'admin-market-master',
       customerName: 'PalengkeGo Market Admin',
       lastMessageText: 'Sige po Market Master, susundin po namin ang SRP ceiling sa bigas.',
@@ -384,11 +384,11 @@ class AdminMessagingRepository {
       ),
     ];
 
-    // 2. Mer's Mayao Fruit Stand - Stall Holder ↔ Market Admin
+    // 2. Mer's Mayao (Fruit) - Stall Holder ↔ Market Admin
     final conv2 = ChatConversation(
       id: 'conv_fruit_stand_admin',
       stallId: 'v1',
-      stallName: "Mer's Mayao Fruit Stand",
+      stallName: "Mer's Mayao (Fruit)",
       customerUid: 'admin-market-master',
       customerName: 'PalengkeGo Market Admin',
       lastMessageText: 'Noted po Market Admin. Lilinisin na po namin ang fruit racks bago mag-closing.',
@@ -417,7 +417,7 @@ class AdminMessagingRepository {
         id: 'msg_2_2',
         conversationId: 'conv_fruit_stand_admin',
         senderId: 'v1',
-        senderName: "Mer's Mayao Fruit Stand",
+        senderName: "Mer's Mayao",
         senderRole: 'vendor',
         text: 'Noted po Market Admin. Lilinisin na po namin ang fruit racks bago mag-closing.',
         timestamp: now.subtract(const Duration(hours: 1, minutes: 20)),

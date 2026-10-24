@@ -423,14 +423,14 @@ class _MessagesPanelState extends ConsumerState<MessagesPanel>
                 tooltip: 'Back to conversations',
               ),
               const SizedBox(width: 4),
-              _AvatarSmall(name: conv.stallName),
+              _AvatarSmall(name: conv.displayStallName),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      conv.stallName,
+                      conv.displayStallName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -596,7 +596,7 @@ class _ConversationTile extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _AvatarSmall(name: conversation.stallName),
+            _AvatarSmall(name: conversation.displayStallName),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -606,7 +606,7 @@ class _ConversationTile extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          conversation.stallName,
+                          conversation.displayStallName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(

@@ -64,6 +64,10 @@ void main() {
       expect(reconstructed.id, conv.id);
       expect(reconstructed.stallId, conv.stallId);
       expect(reconstructed.hasUnreadForAdmin, isTrue);
+      expect(reconstructed.displayStallName, 'Omar Rivera (Sari-sari)');
+
+      final fruitConv = conv.copyWith(stallName: "Mer's Mayao Fruit Stand");
+      expect(fruitConv.displayStallName, "Mer's Mayao (Fruit)");
     });
   });
 

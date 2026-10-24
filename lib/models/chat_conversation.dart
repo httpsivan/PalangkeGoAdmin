@@ -40,6 +40,18 @@ class ChatConversation {
   bool get hasUnreadForAdmin =>
       adminUnreadCount > 0 || customerUnreadCount > 0 || vendorUnreadCount > 0;
 
+  String get displayStallName {
+    var name = stallName;
+    if (!name.contains('(') && name.toLowerCase().contains('fruit')) {
+      name = '${name.replaceAll(RegExp(r'\s+fruit\s+stand', caseSensitive: false), '')} (Fruit)';
+    }
+    return name.replaceAllMapped(RegExp(r'\(([^)]+)\)'), (m) {
+      final inner = m.group(1) ?? '';
+      if (inner.isEmpty) return '()';
+      return '(${inner[0].toUpperCase()}${inner.substring(1).toLowerCase()})';
+    });
+  }
+
   ChatConversation copyWith({
     String? id,
     String? stallId,
