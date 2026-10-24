@@ -476,11 +476,29 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
               }
               return ListView.builder(
                 controller: _scrollController,
-                padding: const EdgeInsets.all(18),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                 itemCount: messages.length,
                 itemBuilder: (context, index) {
                   final msg = messages[index];
-                  return _FullChatBubble(message: msg);
+                  final prevMsg = index > 0 ? messages[index - 1] : null;
+                  final isNewDay = prevMsg == null ||
+                      msg.timestamp.year != prevMsg.timestamp.year ||
+                      msg.timestamp.month != prevMsg.timestamp.month ||
+                      msg.timestamp.day != prevMsg.timestamp.day;
+
+                  final isRight = (conv.customerUid == 'admin-market-master')
+                      ? msg.isFromAdmin
+                      : (msg.isFromVendor || msg.isFromAdmin);
+
+                  return Column(
+                    children: [
+                      if (isNewDay) _DateDivider(date: msg.timestamp),
+                      _FullChatBubble(
+                        message: msg,
+                        isRight: isRight,
+                      ),
+                    ],
+                  );
                 },
               );
             },
@@ -569,10 +587,58 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
   }
 }
 
+class _DateDivider extends StatelessWidget {
+  const _DateDivider({required this.date});
+
+  final DateTime date;
+
+  String _format(DateTime dt) {
+    final now = DateTime.now();
+    if (dt.year == now.year && dt.month == now.month && dt.day == now.day) {
+      return 'Today • ${DateFormat('MMMM d, yyyy').format(dt)}';
+    }
+    final yesterday = now.subtract(const Duration(days: 1));
+    if (dt.year == yesterday.year && dt.month == yesterday.month && dt.day == yesterday.day) {
+      return 'Yesterday • ${DateFormat('MMMM d, yyyy').format(dt)}';
+    }
+    return DateFormat('EEEE, MMMM d, yyyy').format(dt);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = semanticColors(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+          decoration: BoxDecoration(
+            color: colors.inputSurface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: colors.subtleBorder),
+          ),
+          child: Text(
+            _format(date),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: colors.secondaryText,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _FullChatBubble extends StatelessWidget {
-  const _FullChatBubble({required this.message});
+  const _FullChatBubble({
+    required this.message,
+    required this.isRight,
+  });
 
   final ChatMessage message;
+  final bool isRight;
 
   @override
   Widget build(BuildContext context) {
@@ -591,7 +657,7 @@ class _FullChatBubble extends StatelessWidget {
     } else if (isVendor) {
       bg = isDark ? colors.cardBackground : const Color(0xFFF0FDF4);
       fg = colors.primaryText;
-      border = Border.all(color: const Color(0xFF10B981).withValues(alpha: .35));
+      border = Border.all(color: const Color(0xFF10B981).withValues(alpha: .4));
     } else {
       bg = colors.inputSurface;
       fg = colors.primaryText;
@@ -599,14 +665,16 @@ class _FullChatBubble extends StatelessWidget {
     }
 
     final roleLabel = isAdmin
-        ? 'Market Master / Admin'
+        ? 'PalengkeGo Market Admin'
         : (isVendor ? 'Stall Holder (${message.senderName})' : message.senderName);
 
+    final dateStr = DateFormat('MMM d, yyyy • h:mm a').format(message.timestamp);
+
     return Align(
-      alignment: isAdmin ? Alignment.centerRight : Alignment.centerLeft,
+      alignment: isRight ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
-        constraints: const BoxConstraints(maxWidth: 420),
+        constraints: const BoxConstraints(maxWidth: 440),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: bg,
@@ -614,8 +682,8 @@ class _FullChatBubble extends StatelessWidget {
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(16),
             topRight: const Radius.circular(16),
-            bottomLeft: Radius.circular(isAdmin ? 16 : 4),
-            bottomRight: Radius.circular(isAdmin ? 4 : 16),
+            bottomLeft: Radius.circular(isRight ? 16 : 3),
+            bottomRight: Radius.circular(isRight ? 3 : 16),
           ),
           boxShadow: [
             BoxShadow(
@@ -627,28 +695,57 @@ class _FullChatBubble extends StatelessWidget {
         ),
         child: Column(
           crossAxisAlignment:
-              isAdmin ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              isRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
-            Text(
-              roleLabel,
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: isAdmin ? Colors.white.withValues(alpha: .9) : colors.secondaryText,
-              ),
+            // Sender and Date at the top of the message
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment:
+                  isRight ? MainAxisAlignment.end : MainAxisAlignment.start,
+              children: [
+                if (!isRight) ...[
+                  Text(
+                    roleLabel,
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                      color: colors.secondaryText,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    dateStr,
+                    style: TextStyle(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w500,
+                      color: colors.mutedText,
+                    ),
+                  ),
+                ] else ...[
+                  Text(
+                    dateStr,
+                    style: TextStyle(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w500,
+                      color: isAdmin ? Colors.white.withValues(alpha: .8) : colors.mutedText,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    roleLabel,
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                      color: isAdmin ? Colors.white : (isDark ? colors.accent : const Color(0xFF047857)),
+                    ),
+                  ),
+                ],
+              ],
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 5),
             Text(
               message.text,
               style: TextStyle(fontSize: 13, color: fg, height: 1.4),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              DateFormat('h:mm a').format(message.timestamp),
-              style: TextStyle(
-                fontSize: 9.5,
-                color: isAdmin ? Colors.white.withValues(alpha: .7) : colors.mutedText,
-              ),
             ),
           ],
         ),
