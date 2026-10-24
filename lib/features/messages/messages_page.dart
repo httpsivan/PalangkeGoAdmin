@@ -187,7 +187,7 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Oversee customer inquiries, communicate directly with stall holders, and manage live market inquiries.',
+                  'Communicate directly with registered stall holders and vendors across the public market.',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: .8),
                     fontSize: 12,
@@ -204,15 +204,12 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
   List<ChatConversation> _filterConversations(List<ChatConversation> list) {
     return list.where((c) {
       if (_filter == 'Unread' && !c.hasUnreadForAdmin) return false;
-      if (_filter == 'Stall Holders' && c.stallName.isEmpty) return false;
-      if (_filter == 'Customers' && c.customerName.isEmpty) return false;
 
       if (_search.isNotEmpty) {
         final matchStall = c.stallName.toLowerCase().contains(_search);
-        final matchCustomer = c.customerName.toLowerCase().contains(_search);
         final matchSnippet = c.lastMessageText.toLowerCase().contains(_search);
         final matchType = c.inquiryType.toLowerCase().contains(_search);
-        if (!matchStall && !matchCustomer && !matchSnippet && !matchType) {
+        if (!matchStall && !matchSnippet && !matchType) {
           return false;
         }
       }
@@ -262,7 +259,7 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
           child: Row(
             children: [
-              for (final f in ['All', 'Unread', 'Stall Holders', 'Customers']) ...[
+              for (final f in ['All', 'Unread']) ...[
                 _filterPill(colors, f),
                 const SizedBox(width: 6),
               ],
@@ -327,7 +324,7 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    'Customer: ${conv.customerName}',
+                                    '🏪 Stall: ${conv.stallId}',
                                     style: TextStyle(fontSize: 11, color: colors.secondaryText),
                                   ),
                                   const SizedBox(height: 3),
@@ -437,7 +434,7 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Customer: ${conv.customerName}',
+                      'Stall Holder • ID: ${conv.stallId}',
                       style: TextStyle(fontSize: 11.5, color: colors.mutedText),
                     ),
                   ],
@@ -486,9 +483,7 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
                       msg.timestamp.month != prevMsg.timestamp.month ||
                       msg.timestamp.day != prevMsg.timestamp.day;
 
-                  final isRight = (conv.customerUid == 'admin-market-master')
-                      ? msg.isFromAdmin
-                      : (msg.isFromVendor || msg.isFromAdmin);
+                  final isRight = msg.isFromAdmin;
 
                   return Column(
                     children: [
@@ -578,7 +573,7 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
           ),
           const SizedBox(height: 6),
           Text(
-            'Choose a customer or vendor conversation from the left to view messages and reply.',
+            'Choose a stall holder conversation from the left to view messages and reply.',
             style: TextStyle(fontSize: 12, color: colors.mutedText),
           ),
         ],

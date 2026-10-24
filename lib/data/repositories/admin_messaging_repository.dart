@@ -65,8 +65,8 @@ class AdminMessagingRepository {
   final SupabaseClient? _client;
   final SharedPreferences _preferences;
 
-  static const _conversationsKey = 'mock_chat_conversations_v1';
-  static const _messagesKey = 'mock_chat_messages_v1';
+  static const _conversationsKey = 'mock_chat_conversations_v2';
+  static const _messagesKey = 'mock_chat_messages_v2';
 
   final List<ChatConversation> _localConversations = [];
   final Map<String, List<ChatMessage>> _localMessages = {};
@@ -333,21 +333,20 @@ class AdminMessagingRepository {
 
     final now = DateTime.now();
 
-    // 1. Omar Rivera (Sari-Sari, Block 14 - Stall 2) with Customer Ana Santos
+    // 1. Omar Rivera (Sari-Sari, Block 14 - Stall 2) - Stall Holder ↔ Market Admin
     final conv1 = ChatConversation(
-      id: 'conv_omar_rivera_ana',
+      id: 'conv_omar_rivera_admin',
       stallId: 'VND-92858',
       stallName: 'Omar Rivera (SARI-SARI)',
-      customerUid: 'cust_ana_santos',
-      customerName: 'Ana Santos',
-      lastMessageText: 'Available po ba yung bigas na Sinandomeng 5kg?',
+      customerUid: 'admin-market-master',
+      customerName: 'PalengkeGo Market Admin',
+      lastMessageText: 'Sige po Market Master, susundin po namin ang SRP ceiling sa bigas.',
       lastMessageTimestamp: now.subtract(const Duration(minutes: 12)),
-      lastMessageSenderId: 'cust_ana_santos',
-      vendorUnreadCount: 1,
+      lastMessageSenderId: 'VND-92858',
+      vendorUnreadCount: 0,
       customerUnreadCount: 0,
       adminUnreadCount: 1,
-      inquiryType: 'product',
-      relatedOrderId: 'ORD-8924',
+      inquiryType: 'general',
       createdAt: now.subtract(const Duration(days: 1)),
       updatedAt: now.subtract(const Duration(minutes: 12)),
     );
@@ -355,51 +354,50 @@ class AdminMessagingRepository {
     final msg1 = [
       ChatMessage(
         id: 'msg_1_1',
-        conversationId: 'conv_omar_rivera_ana',
-        senderId: 'cust_ana_santos',
-        senderName: 'Ana Santos',
-        senderRole: 'customer',
-        text: 'Magandang araw po Mang Omar! Magtatanong lang po sana.',
+        conversationId: 'conv_omar_rivera_admin',
+        senderId: 'admin-market-master',
+        senderName: 'PalengkeGo Market Admin',
+        senderRole: 'admin',
+        text: 'Magandang araw Mang Omar. Paalala lang po ukol sa DTI Suggested Retail Price monitoring para sa bigas ngayong linggo.',
         timestamp: now.subtract(const Duration(minutes: 18)),
         isRead: true,
       ),
       ChatMessage(
         id: 'msg_1_2',
-        conversationId: 'conv_omar_rivera_ana',
+        conversationId: 'conv_omar_rivera_admin',
         senderId: 'VND-92858',
         senderName: 'Omar Rivera',
         senderRole: 'vendor',
-        text: 'Opo ma\'am Ana, ano po yun?',
+        text: 'Magandang araw po Market Master! Nakuha na po namin ang official circular.',
         timestamp: now.subtract(const Duration(minutes: 15)),
         isRead: true,
       ),
       ChatMessage(
         id: 'msg_1_3',
-        conversationId: 'conv_omar_rivera_ana',
-        senderId: 'cust_ana_santos',
-        senderName: 'Ana Santos',
-        senderRole: 'customer',
-        text: 'Available po ba yung bigas na Sinandomeng 5kg?',
+        conversationId: 'conv_omar_rivera_admin',
+        senderId: 'VND-92858',
+        senderName: 'Omar Rivera',
+        senderRole: 'vendor',
+        text: 'Sige po Market Master, susundin po namin ang SRP ceiling sa bigas.',
         timestamp: now.subtract(const Duration(minutes: 12)),
         isRead: false,
       ),
     ];
 
-    // 2. Mer's Mayao Fruit Stand with Customer Juan Dela Cruz
+    // 2. Mer's Mayao Fruit Stand - Stall Holder ↔ Market Admin
     final conv2 = ChatConversation(
-      id: 'conv_fruit_stand_juan',
+      id: 'conv_fruit_stand_admin',
       stallId: 'v1',
       stallName: "Mer's Mayao Fruit Stand",
-      customerUid: 'cust_juan_delacruz',
-      customerName: 'Juan Dela Cruz',
-      lastMessageText: 'Opo sir, sariwa po at bagong dating mula Batangas.',
+      customerUid: 'admin-market-master',
+      customerName: 'PalengkeGo Market Admin',
+      lastMessageText: 'Noted po Market Admin. Lilinisin na po namin ang fruit racks bago mag-closing.',
       lastMessageTimestamp: now.subtract(const Duration(hours: 1, minutes: 20)),
       lastMessageSenderId: 'v1',
       vendorUnreadCount: 0,
-      customerUnreadCount: 1,
+      customerUnreadCount: 0,
       adminUnreadCount: 0,
-      inquiryType: 'order',
-      relatedOrderId: 'ORD-7712',
+      inquiryType: 'general',
       createdAt: now.subtract(const Duration(days: 2)),
       updatedAt: now.subtract(const Duration(hours: 1, minutes: 20)),
     );
@@ -407,27 +405,27 @@ class AdminMessagingRepository {
     final msg2 = [
       ChatMessage(
         id: 'msg_2_1',
-        conversationId: 'conv_fruit_stand_juan',
-        senderId: 'cust_juan_delacruz',
-        senderName: 'Juan Dela Cruz',
-        senderRole: 'customer',
-        text: 'Kumusta po! Matamis po ba ang mangga ngayon?',
+        conversationId: 'conv_fruit_stand_admin',
+        senderId: 'admin-market-master',
+        senderName: 'PalengkeGo Market Admin',
+        senderRole: 'admin',
+        text: 'Paalala lang po ukol sa scheduled deep cleaning at sanitation ng fruit section bukas ng alas-sais ng gabi.',
         timestamp: now.subtract(const Duration(hours: 1, minutes: 30)),
         isRead: true,
       ),
       ChatMessage(
         id: 'msg_2_2',
-        conversationId: 'conv_fruit_stand_juan',
+        conversationId: 'conv_fruit_stand_admin',
         senderId: 'v1',
         senderName: "Mer's Mayao Fruit Stand",
         senderRole: 'vendor',
-        text: 'Opo sir, sariwa po at bagong dating mula Batangas.',
+        text: 'Noted po Market Admin. Lilinisin na po namin ang fruit racks bago mag-closing.',
         timestamp: now.subtract(const Duration(hours: 1, minutes: 20)),
-        isRead: false,
+        isRead: true,
       ),
     ];
 
-    // 3. Admin Market Master Direct Inquiry with Vendor Cora Morales
+    // 3. Cora Morales (Manilatas) - Stall Holder ↔ Market Admin
     final conv3 = ChatConversation(
       id: 'conv_admin_cora_morales',
       stallId: 'VND-29482',
@@ -468,21 +466,20 @@ class AdminMessagingRepository {
       ),
     ];
 
-    // 4. Mateo Garcia (Vegetables) with Customer Maria Clara
+    // 4. Mateo Garcia (Vegetables) - Stall Holder ↔ Market Admin
     final conv4 = ChatConversation(
-      id: 'conv_mateo_maria',
+      id: 'conv_mateo_admin',
       stallId: 'VND-83742',
       stallName: 'Mateo Garcia (Vegetables)',
-      customerUid: 'cust_maria_clara',
-      customerName: 'Maria Clara',
-      lastMessageText: 'Salamat po kuya Mateo! Natanggap ko na po ang delivery.',
+      customerUid: 'admin-market-master',
+      customerName: 'PalengkeGo Market Admin',
+      lastMessageText: 'Approved po Kuya Mateo. Naabisuhan na po ang security guards sa gate para sa inyong delivery truck.',
       lastMessageTimestamp: now.subtract(const Duration(days: 1, hours: 2)),
-      lastMessageSenderId: 'cust_maria_clara',
+      lastMessageSenderId: 'admin-market-master',
       vendorUnreadCount: 0,
       customerUnreadCount: 0,
       adminUnreadCount: 0,
-      inquiryType: 'delivery',
-      relatedOrderId: 'ORD-6531',
+      inquiryType: 'general',
       createdAt: now.subtract(const Duration(days: 4)),
       updatedAt: now.subtract(const Duration(days: 1, hours: 2)),
     );
@@ -490,31 +487,31 @@ class AdminMessagingRepository {
     final msg4 = [
       ChatMessage(
         id: 'msg_4_1',
-        conversationId: 'conv_mateo_maria',
+        conversationId: 'conv_mateo_admin',
         senderId: 'VND-83742',
         senderName: 'Mateo Garcia',
         senderRole: 'vendor',
-        text: 'Nasa rider na po ang gulay order niyo ma\'am.',
+        text: 'Market Master, humihingi po sana ng clearance para sa maagang delivery unloading bukas ng 4:00 AM sa Bay 2.',
         timestamp: now.subtract(const Duration(days: 1, hours: 3)),
         isRead: true,
       ),
       ChatMessage(
         id: 'msg_4_2',
-        conversationId: 'conv_mateo_maria',
-        senderId: 'cust_maria_clara',
-        senderName: 'Maria Clara',
-        senderRole: 'customer',
-        text: 'Salamat po kuya Mateo! Natanggap ko na po ang delivery.',
+        conversationId: 'conv_mateo_admin',
+        senderId: 'admin-market-master',
+        senderName: 'PalengkeGo Market Admin',
+        senderRole: 'admin',
+        text: 'Approved po Kuya Mateo. Naabisuhan na po ang security guards sa gate para sa inyong delivery truck.',
         timestamp: now.subtract(const Duration(days: 1, hours: 2)),
         isRead: true,
       ),
     ];
 
     _localConversations.addAll([conv1, conv2, conv3, conv4]);
-    _localMessages['conv_omar_rivera_ana'] = msg1;
-    _localMessages['conv_fruit_stand_juan'] = msg2;
+    _localMessages['conv_omar_rivera_admin'] = msg1;
+    _localMessages['conv_fruit_stand_admin'] = msg2;
     _localMessages['conv_admin_cora_morales'] = msg3;
-    _localMessages['conv_mateo_maria'] = msg4;
+    _localMessages['conv_mateo_admin'] = msg4;
   }
 
   void _notifyConversations() {

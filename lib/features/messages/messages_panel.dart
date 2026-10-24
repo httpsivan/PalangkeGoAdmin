@@ -10,7 +10,7 @@ import '../../data/repositories/admin_messaging_repository.dart';
 import '../../models/chat_conversation.dart';
 import '../../models/chat_message.dart';
 
-enum MessageFilter { all, unread, stallHolders, customers }
+enum MessageFilter { all, unread }
 
 class MessagesPanel extends ConsumerStatefulWidget {
   const MessagesPanel({
@@ -200,15 +200,12 @@ class _MessagesPanelState extends ConsumerState<MessagesPanel>
   List<ChatConversation> _filterConversations(List<ChatConversation> list) {
     return list.where((c) {
       if (_filter == MessageFilter.unread && !c.hasUnreadForAdmin) return false;
-      if (_filter == MessageFilter.stallHolders && c.stallName.isEmpty) return false;
-      if (_filter == MessageFilter.customers && c.customerName.isEmpty) return false;
 
       if (_search.isNotEmpty) {
         final matchStall = c.stallName.toLowerCase().contains(_search);
-        final matchCustomer = c.customerName.toLowerCase().contains(_search);
         final matchSnippet = c.lastMessageText.toLowerCase().contains(_search);
         final matchType = c.inquiryType.toLowerCase().contains(_search);
-        if (!matchStall && !matchCustomer && !matchSnippet && !matchType) {
+        if (!matchStall && !matchSnippet && !matchType) {
           return false;
         }
       }
@@ -313,10 +310,6 @@ class _MessagesPanelState extends ConsumerState<MessagesPanel>
           _filterChip(colors, 'All', MessageFilter.all),
           const SizedBox(width: 6),
           _filterChip(colors, 'Unread', MessageFilter.unread),
-          const SizedBox(width: 6),
-          _filterChip(colors, 'Stall Holders', MessageFilter.stallHolders),
-          const SizedBox(width: 6),
-          _filterChip(colors, 'Customers', MessageFilter.customers),
         ],
       ),
     );
@@ -363,7 +356,7 @@ class _MessagesPanelState extends ConsumerState<MessagesPanel>
             ),
             const SizedBox(height: 4),
             Text(
-              'Customer & vendor conversations will appear here in real-time.',
+              'Vendor conversations will appear here in real-time.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 11, color: colors.mutedText),
             ),
@@ -447,7 +440,7 @@ class _MessagesPanelState extends ConsumerState<MessagesPanel>
                       ),
                     ),
                     Text(
-                      'Customer: ${conv.customerName}',
+                      'Stall Holder • ID: ${conv.stallId}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(fontSize: 11, color: colors.mutedText),
@@ -494,9 +487,7 @@ class _MessagesPanelState extends ConsumerState<MessagesPanel>
                       msg.timestamp.month != prevMsg.timestamp.month ||
                       msg.timestamp.day != prevMsg.timestamp.day;
 
-                  final isRight = (conv.customerUid == 'admin-market-master')
-                      ? msg.isFromAdmin
-                      : (msg.isFromVendor || msg.isFromAdmin);
+                  final isRight = msg.isFromAdmin;
 
                   return Column(
                     children: [
@@ -637,7 +628,7 @@ class _ConversationTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '👤 ${conversation.customerName}',
+                    '🏪 Stall: ${conversation.stallId}',
                     style: TextStyle(fontSize: 10.5, color: colors.secondaryText, fontWeight: FontWeight.w500),
                   ),
                   const SizedBox(height: 3),
