@@ -67,7 +67,8 @@ ThemeData buildLightTheme() {
       style: MenuStyle(
         backgroundColor: const WidgetStatePropertyAll(Colors.white),
         surfaceTintColor: const WidgetStatePropertyAll(Colors.white),
-        shadowColor: WidgetStatePropertyAll(Colors.black.withValues(alpha: .14)),
+        shadowColor:
+            WidgetStatePropertyAll(Colors.black.withValues(alpha: .14)),
       ),
     ),
     snackBarTheme: SnackBarThemeData(

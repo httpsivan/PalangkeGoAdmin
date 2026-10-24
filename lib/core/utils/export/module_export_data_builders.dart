@@ -17,15 +17,12 @@ class AccountsExportData {
   }) {
     final now = exportDate ?? DateTime.now();
 
-    final activeCount = allVendors
-        .where((v) => v.status == AccountStatus.active)
-        .length;
-    final suspendedCount = allVendors
-        .where((v) => v.status == AccountStatus.suspended)
-        .length;
-    final blockedCount = allVendors
-        .where((v) => v.status == AccountStatus.blocked)
-        .length;
+    final activeCount =
+        allVendors.where((v) => v.status == AccountStatus.active).length;
+    final suspendedCount =
+        allVendors.where((v) => v.status == AccountStatus.suspended).length;
+    final blockedCount =
+        allVendors.where((v) => v.status == AccountStatus.blocked).length;
 
     final summary = ReportSummary(
       title: 'REPORT SUMMARY',
@@ -106,15 +103,12 @@ class AccountsExportData {
   }) {
     final now = exportDate ?? DateTime.now();
 
-    final activeCount = allCustomers
-        .where((c) => c.status == AccountStatus.active)
-        .length;
-    final suspendedCount = allCustomers
-        .where((c) => c.status == AccountStatus.suspended)
-        .length;
-    final blockedCount = allCustomers
-        .where((c) => c.status == AccountStatus.blocked)
-        .length;
+    final activeCount =
+        allCustomers.where((c) => c.status == AccountStatus.active).length;
+    final suspendedCount =
+        allCustomers.where((c) => c.status == AccountStatus.suspended).length;
+    final blockedCount =
+        allCustomers.where((c) => c.status == AccountStatus.blocked).length;
 
     final summary = ReportSummary(
       title: 'REPORT SUMMARY',
@@ -328,9 +322,8 @@ class RenewalExportData {
     final now = exportDate ?? DateTime.now();
 
     final totalCount = allRenewals.length;
-    final approvedCount = allRenewals
-        .where((r) => r.status == RenewalStatus.approved)
-        .length;
+    final approvedCount =
+        allRenewals.where((r) => r.status == RenewalStatus.approved).length;
     final expiring7dCount = allRenewals.where((r) {
       final days = r.expiryDate.difference(now).inDays;
       return days >= 0 && days <= 7 && r.status == RenewalStatus.reviewing;
@@ -338,8 +331,7 @@ class RenewalExportData {
     final expiredCount = allRenewals
         .where(
           (r) =>
-              r.status == RenewalStatus.expired ||
-              r.expiryDate.isBefore(now),
+              r.status == RenewalStatus.expired || r.expiryDate.isBefore(now),
         )
         .length;
 
@@ -484,9 +476,7 @@ class ComplaintExportData {
 
     final hasResolution = filteredReports.any(
       (r) =>
-          r.actionTaken != null ||
-          r.resolvedAt != null ||
-          r.resolvedBy != null,
+          r.actionTaken != null || r.resolvedAt != null || r.resolvedBy != null,
     );
 
     final columns = [

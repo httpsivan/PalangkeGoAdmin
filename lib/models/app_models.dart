@@ -1,5 +1,60 @@
 import 'dart:typed_data';
 
+enum StallStatus { available, occupied, reserved, underMaintenance }
+
+class Stall {
+  const Stall({
+    required this.id,
+    required this.stallNumber,
+    required this.section,
+    required this.status,
+    this.vendorId,
+    this.vendorName,
+    this.maintenanceNotes,
+    this.closureStartDate,
+    this.closureEndDate,
+  });
+
+  final String id;
+  final String stallNumber;
+  final String section;
+  final StallStatus status;
+  final String? vendorId;
+  final String? vendorName;
+  final String? maintenanceNotes;
+  final DateTime? closureStartDate;
+  final DateTime? closureEndDate;
+
+  /// Use the clear flags to remove nullable relationships or maintenance data.
+  Stall copyWith({
+    String? stallNumber,
+    String? section,
+    StallStatus? status,
+    String? vendorId,
+    String? vendorName,
+    String? maintenanceNotes,
+    DateTime? closureStartDate,
+    DateTime? closureEndDate,
+    bool clearVendor = false,
+    bool clearMaintenance = false,
+  }) {
+    return Stall(
+      id: id,
+      stallNumber: stallNumber ?? this.stallNumber,
+      section: section ?? this.section,
+      status: status ?? this.status,
+      vendorId: clearVendor ? null : (vendorId ?? this.vendorId),
+      vendorName: clearVendor ? null : (vendorName ?? this.vendorName),
+      maintenanceNotes:
+          clearMaintenance ? null : (maintenanceNotes ?? this.maintenanceNotes),
+      closureStartDate:
+          clearMaintenance ? null : (closureStartDate ?? this.closureStartDate),
+      closureEndDate:
+          clearMaintenance ? null : (closureEndDate ?? this.closureEndDate),
+    );
+  }
+}
+
 enum AccountStatus { active, offline, suspended, blocked }
 
 enum ApplicationStatus { verified, reviewing, invalidDocs, rejected }
@@ -145,9 +200,8 @@ class Vendor {
         closureRequestedAt: clearClosureRequest
             ? null
             : closureRequestedAt ?? this.closureRequestedAt,
-        closureReason: clearClosureRequest
-            ? null
-            : closureReason ?? this.closureReason,
+        closureReason:
+            clearClosureRequest ? null : closureReason ?? this.closureReason,
         relocationRequestedAt: clearRelocationRequest
             ? null
             : relocationRequestedAt ?? this.relocationRequestedAt,
@@ -308,7 +362,11 @@ class RenewalRequest {
 }
 
 class Report {
+  final List<String> evidenceUrls;
+  bool get isUnread => status == ReportStatus.pending;
+
   const Report({
+    this.evidenceUrls = const [],
     required this.id,
     required this.type,
     required this.accountIssue,
@@ -382,6 +440,7 @@ class Report {
         owner: owner,
         stallNumber: stallNumber,
         previousViolations: previousViolations,
+        evidenceUrls: evidenceUrls,
         notes: notes ?? this.notes,
         decision: decision ?? this.decision,
         actionTaken: actionTaken ?? this.actionTaken,
@@ -409,6 +468,10 @@ class Announcement {
     this.failedCount = 0,
     this.imageUrl,
     this.imageBytes,
+    this.popupImageUrls = const [],
+    this.popupImageBytes = const [],
+    this.showAsPopup = false,
+    this.facebookUrl,
   });
 
   final String id;
@@ -427,6 +490,10 @@ class Announcement {
   final int failedCount;
   final String? imageUrl;
   final Uint8List? imageBytes;
+  final List<String> popupImageUrls;
+  final List<Uint8List> popupImageBytes;
+  final bool showAsPopup;
+  final String? facebookUrl;
 
   Announcement copyWith({
     String? id,
@@ -445,6 +512,10 @@ class Announcement {
     int? failedCount,
     String? imageUrl,
     Uint8List? imageBytes,
+    List<String>? popupImageUrls,
+    List<Uint8List>? popupImageBytes,
+    bool? showAsPopup,
+    String? facebookUrl,
     bool clearImage = false,
   }) =>
       Announcement(
@@ -464,5 +535,9 @@ class Announcement {
         failedCount: failedCount ?? this.failedCount,
         imageUrl: clearImage ? null : imageUrl ?? this.imageUrl,
         imageBytes: clearImage ? null : imageBytes ?? this.imageBytes,
+        popupImageUrls: popupImageUrls ?? this.popupImageUrls,
+        popupImageBytes: popupImageBytes ?? this.popupImageBytes,
+        showAsPopup: showAsPopup ?? this.showAsPopup,
+        facebookUrl: facebookUrl ?? this.facebookUrl,
       );
 }

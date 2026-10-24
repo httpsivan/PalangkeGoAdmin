@@ -13,13 +13,12 @@ Object? _sanitizeCell(Object? value) {
 }
 
 String buildCsv(List<List<Object?>> rows) {
-  final sanitized = rows
-      .map((row) => row.map(_sanitizeCell).toList())
-      .toList();
+  final sanitized = rows.map((row) => row.map(_sanitizeCell).toList()).toList();
   return const ListToCsvConverter().convert(sanitized);
 }
 
 void downloadCsv(String csv, String filename) {
   final bytes = Uint8List.fromList(utf8.encode(csv));
-  saveFileBytes(bytes: bytes, filename: filename, mimeType: 'text/csv;charset=utf-8');
+  saveFileBytes(
+      bytes: bytes, filename: filename, mimeType: 'text/csv;charset=utf-8');
 }

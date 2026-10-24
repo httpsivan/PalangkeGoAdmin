@@ -18,12 +18,27 @@ class AdminShell extends ConsumerWidget {
   final Widget child;
   static const navItems = [
     ('Overview', 'Overview', '/overview', Icons.home_outlined),
-    ('Sales Reports', 'Sales Reports', '/sales-reports', Icons.bar_chart_rounded),
+    (
+      'Sales Reports',
+      'Sales Reports',
+      '/sales-reports',
+      Icons.bar_chart_rounded
+    ),
     ('Accounts', 'Accounts', '/accounts', Icons.people_outline_rounded),
-    ('Stall Holder Application', 'Applications', '/applications', Icons.verified_user_outlined),
+    (
+      'Stall Holder Application',
+      'Applications',
+      '/applications',
+      Icons.verified_user_outlined
+    ),
     ('Renewal', 'Renewal', '/renewal', Icons.autorenew_rounded),
     ('Complaint', 'Complaint', '/reports', Icons.report_problem_outlined),
-    ('Announcements', 'Announcements', '/announcements', Icons.campaign_rounded),
+    (
+      'Announcements',
+      'Announcements',
+      '/announcements',
+      Icons.campaign_rounded
+    ),
   ];
 
   @override
@@ -116,36 +131,33 @@ class _TopNavigationState extends ConsumerState<_TopNavigation> {
               children: [
                 AppLogo(
                   dark: true,
-                  compact: screenWidth < 1400,
+                  compact: screenWidth < 1650,
                   showAdminBadge: screenWidth >= 1100,
                   showTagline: screenWidth >= 1600,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Align(
-                    alignment: Alignment.center,
-                    child: Listener(
-                      onPointerSignal: (pointerSignal) {
-                        if (pointerSignal is PointerScrollEvent &&
-                            _scrollController.hasClients) {
-                          final target = (_scrollController.offset +
-                                  pointerSignal.scrollDelta.dy)
-                              .clamp(
-                                  0.0,
-                                  _scrollController
-                                      .position.maxScrollExtent);
-                          _scrollController.jumpTo(target);
-                        }
-                      },
-                      child: ScrollConfiguration(
-                        behavior: ScrollConfiguration.of(context).copyWith(
-                          dragDevices: {
-                            ui.PointerDeviceKind.touch,
-                            ui.PointerDeviceKind.mouse,
-                            ui.PointerDeviceKind.trackpad,
-                          },
-                          scrollbars: false,
-                        ),
+                  child: Listener(
+                    onPointerSignal: (pointerSignal) {
+                      if (pointerSignal is PointerScrollEvent &&
+                          _scrollController.hasClients) {
+                        final target = (_scrollController.offset +
+                                pointerSignal.scrollDelta.dy)
+                            .clamp(0.0,
+                                _scrollController.position.maxScrollExtent);
+                        _scrollController.jumpTo(target);
+                      }
+                    },
+                    child: ScrollConfiguration(
+                      behavior: ScrollConfiguration.of(context).copyWith(
+                        dragDevices: {
+                          ui.PointerDeviceKind.touch,
+                          ui.PointerDeviceKind.mouse,
+                          ui.PointerDeviceKind.trackpad,
+                        },
+                        scrollbars: false,
+                      ),
+                      child: Center(
                         child: SingleChildScrollView(
                           controller: _scrollController,
                           scrollDirection: Axis.horizontal,
@@ -203,7 +215,6 @@ class _NavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = semanticColors(context);
-
     final itemWidget = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2),
       child: MouseRegion(
@@ -230,13 +241,16 @@ class _NavItem extends StatelessWidget {
                   Icon(
                     icon,
                     size: 16,
-                    color: active ? colors.activeNavigationText : colors.heroMuted,
+                    color:
+                        active ? colors.activeNavigationText : colors.heroMuted,
                   ),
                   const SizedBox(width: 5),
                   Text(
                     label,
                     style: GoogleFonts.inter(
-                      color: active ? colors.activeNavigationText : colors.heroMuted,
+                      color: active
+                          ? colors.activeNavigationText
+                          : colors.heroMuted,
                       fontSize: 13,
                       fontWeight: active ? FontWeight.w700 : FontWeight.w500,
                     ),
@@ -353,10 +367,20 @@ class _AccountSettingsDialogState
       _saving = true;
       _error = null;
     });
-    await ref.read(adminProfileProvider.notifier).updateProfile(
-          name: name,
-          password: password.isEmpty ? null : password,
-        );
+    try {
+      await ref.read(adminProfileProvider.notifier).updateProfile(
+            name: name,
+            password: password.isEmpty ? null : password,
+          );
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _error = 'Could not save profile: $error';
+        });
+      }
+      return;
+    }
     if (!mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     Navigator.of(context).pop();
@@ -552,7 +576,8 @@ class _MobileDrawer extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Row(
                   children: [
                     const Expanded(

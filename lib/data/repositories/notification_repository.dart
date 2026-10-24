@@ -1,22 +1,52 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/admin_notification.dart';
+import '../../core/config/app_config.dart';
 import '../../core/theme/theme_controller.dart';
+import 'supabase_admin_service.dart';
 
 final notificationProvider =
     StateNotifierProvider<NotificationController, List<AdminNotification>>(
         (ref) {
-  return NotificationController(ref.watch(sharedPreferencesProvider));
+  return NotificationController(
+    ref.watch(sharedPreferencesProvider),
+    supabase: ref.watch(supabaseAdminServiceProvider),
+    syncEnabled: ref.watch(supabaseEnabledProvider),
+  );
 });
 
 class NotificationController extends StateNotifier<List<AdminNotification>> {
-  NotificationController(this._preferences) : super(_seedNotifications()) {
+  NotificationController(
+    this._preferences, {
+    SupabaseAdminService? supabase,
+    bool syncEnabled = false,
+  })  : _supabase = supabase,
+        super(const []) {
     _restore();
+    if (syncEnabled && _supabase != null) {
+      unawaited(_syncNotifications());
+      _syncTimer = Timer.periodic(
+        const Duration(seconds: 15),
+        (_) => _syncNotifications(),
+      );
+    }
   }
 
   final SharedPreferences _preferences;
+  final SupabaseAdminService? _supabase;
   final Set<String> _dismissed = <String>{};
+  Timer? _syncTimer;
+  bool _syncing = false;
+
+  @override
+  void dispose() {
+    _syncTimer?.cancel();
+    super.dispose();
+  }
 
   int get unreadCount => state.where((item) => !item.isRead).length;
 
@@ -78,6 +108,31 @@ class NotificationController extends StateNotifier<List<AdminNotification>> {
         .toList();
   }
 
+  Future<void> _syncNotifications() async {
+    if (_syncing || !mounted) return;
+    _syncing = true;
+    try {
+      final remote = await _supabase!.fetchNotifications();
+      if (!mounted) return;
+      final remoteIds = remote.map((item) => item.id).toSet();
+      final localOnly = state.where(
+        (item) => item.id.startsWith('notif-') && !remoteIds.contains(item.id),
+      );
+      final readIds =
+          (_preferences.getStringList('admin_notification_read') ?? []).toSet();
+      state = [...remote, ...localOnly]
+          .where((item) => !_dismissed.contains(item.id))
+          .map((item) => item.copyWith(
+                isRead: item.isRead || readIds.contains(item.id),
+              ))
+          .toList();
+    } catch (error) {
+      debugPrint('[admin] Notification sync failed: $error');
+    } finally {
+      _syncing = false;
+    }
+  }
+
   Future<void> _persistReadState() => _preferences.setStringList(
         'admin_notification_read',
         state.where((item) => item.isRead).map((item) => item.id).toList(),
@@ -87,103 +142,4 @@ class NotificationController extends StateNotifier<List<AdminNotification>> {
         'admin_notification_dismissed',
         _dismissed.toList(),
       );
-}
-
-List<AdminNotification> _seedNotifications() {
-  final now = DateTime.now();
-  return [
-    AdminNotification(
-      id: 'closure-request-1',
-      title: 'Stall Closure Request',
-      message:
-          'Sophie Sb submitted a request to close stall and surrender lease.',
-      type: NotificationType.accountUpdate,
-      createdAt: now.subtract(const Duration(minutes: 18)),
-      isRead: false,
-      target: const NotificationTarget(
-        type: NotificationTargetType.vendor,
-        id: 'VND-92837',
-      ),
-      actionLabel: 'Review Closure Request',
-    ),
-    AdminNotification(
-      id: 'relocation-request-1',
-      title: 'Stall Relocation Request',
-      message:
-          'Diosa Del Rosario requested relocation to Stall #02, Fish Section.',
-      type: NotificationType.accountUpdate,
-      createdAt: now.subtract(const Duration(hours: 1)),
-      isRead: false,
-      target: const NotificationTarget(
-        type: NotificationTargetType.vendor,
-        id: 'VND-92835',
-      ),
-      actionLabel: 'Review Relocation Request',
-    ),
-    AdminNotification(
-      id: 'vendor-application-1',
-      title: 'New Stall Holder Application',
-      message: 'Ricardo Santos submitted a stall holder application.',
-      type: NotificationType.vendorApplication,
-      createdAt: now.subtract(const Duration(minutes: 5)),
-      isRead: false,
-      target: const NotificationTarget(
-        type: NotificationTargetType.application,
-        id: '#APP-92839',
-      ),
-      actionLabel: 'Review Application',
-    ),
-    AdminNotification(
-      id: 'stall-holder-report-1',
-      title: 'New Stall Holder Report',
-      message: 'A report about Alcel Castillo needs review.',
-      type: NotificationType.report,
-      createdAt: now.subtract(const Duration(minutes: 38)),
-      isRead: false,
-      target: const NotificationTarget(
-        type: NotificationTargetType.report,
-        id: '#RPT-100',
-      ),
-      actionLabel: 'Review Stall Holder Report',
-    ),
-    AdminNotification(
-      id: 'renewal-1',
-      title: 'Renewal Request',
-      message: 'Rico Fernandez submitted a stall renewal request.',
-      type: NotificationType.renewal,
-      createdAt: now.subtract(const Duration(hours: 2)),
-      isRead: false,
-      target: const NotificationTarget(
-        type: NotificationTargetType.renewal,
-        id: '#RN-92835',
-      ),
-      actionLabel: 'Review Renewal',
-    ),
-    AdminNotification(
-      id: 'customer-1',
-      title: 'New Customer Registration',
-      message: 'A new customer account was created.',
-      type: NotificationType.customer,
-      createdAt: now.subtract(const Duration(hours: 7)),
-      isRead: true,
-      target: const NotificationTarget(
-        type: NotificationTargetType.customer,
-        id: 'CUS-1200',
-      ),
-      actionLabel: 'View Customer',
-    ),
-    AdminNotification(
-      id: 'customer-report-1',
-      title: 'New Customer Report',
-      message: 'A report about Juan Dela Cruz needs review.',
-      type: NotificationType.report,
-      createdAt: now.subtract(const Duration(days: 1, hours: 2)),
-      isRead: false,
-      target: const NotificationTarget(
-        type: NotificationTargetType.report,
-        id: '#RPT-200',
-      ),
-      actionLabel: 'Review Customer Report',
-    ),
-  ];
 }

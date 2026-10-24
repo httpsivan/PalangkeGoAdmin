@@ -78,7 +78,8 @@ void main() {
       preferences = await SharedPreferences.getInstance();
     });
 
-    Widget buildTestableDialog(WidgetTester tester, VendorApplication application) {
+    Widget buildTestableDialog(
+        WidgetTester tester, VendorApplication application) {
       tester.view.physicalSize = const Size(1920, 1080);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);

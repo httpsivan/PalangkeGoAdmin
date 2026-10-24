@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -8,6 +9,7 @@ import '../../core/config/app_config.dart';
 import '../../core/theme/theme_controller.dart';
 import '../../models/admin_models.dart';
 import 'firebase_admin_service.dart';
+import 'supabase_admin_service.dart';
 
 const defaultAdminName = 'Kirren Michael Fraginal';
 const defaultAdminEmail = 'admin@palengkego.gov.ph';
@@ -51,11 +53,21 @@ Uint8List? _readAdminAvatar(SharedPreferences preferences) {
 
 final adminProfileProvider =
     StateNotifierProvider<AdminProfileController, AdminProfile>((ref) {
-  return AdminProfileController(ref.watch(sharedPreferencesProvider));
+  final controller = AdminProfileController(
+    ref.watch(sharedPreferencesProvider),
+    ref.read(supabaseAdminServiceProvider),
+  );
+  if (ref.read(supabaseEnabledProvider)) {
+    ref.listen<bool>(authProvider, (_, signedIn) {
+      if (signedIn) unawaited(controller.loadFromSupabase());
+    });
+    if (ref.read(authProvider)) unawaited(controller.loadFromSupabase());
+  }
+  return controller;
 });
 
 class AdminProfileController extends StateNotifier<AdminProfile> {
-  AdminProfileController(this._preferences)
+  AdminProfileController(this._preferences, this._supabase)
       : super(
           AdminProfile(
             name: _preferences.getString('admin_name') ?? defaultAdminName,
@@ -67,6 +79,25 @@ class AdminProfileController extends StateNotifier<AdminProfile> {
         );
 
   final SharedPreferences _preferences;
+  final SupabaseAdminService _supabase;
+
+  Future<void> loadFromSupabase() async {
+    try {
+      final profile = await _supabase.fetchAdminProfile();
+      final name = (profile['fullName'] as String? ?? '').trim();
+      final email = (profile['email'] as String? ?? '').trim();
+      if (name.isEmpty && email.isEmpty) return;
+      state = AdminProfile(
+        name: name.isEmpty ? state.name : name,
+        email: email.isEmpty ? state.email : email,
+        password: state.password,
+        avatarBytes: state.avatarBytes,
+      );
+      if (name.isNotEmpty) await _preferences.setString('admin_name', name);
+    } catch (error) {
+      debugPrint('[admin] Could not load admin profile: $error');
+    }
+  }
 
   Future<void> updateProfile({
     required String name,
@@ -74,12 +105,17 @@ class AdminProfileController extends StateNotifier<AdminProfile> {
     Uint8List? avatarBytes,
     bool removeAvatar = false,
   }) async {
+    final nextName = name.trim();
+    if (_supabase.isConfigured) {
+      final error = await _supabase.updateAdminName(nextName);
+      if (error != null) throw StateError(error);
+    }
     final nextPassword = password == null || password.trim().isEmpty
         ? state.password
         : password.trim();
     final nextAvatar = removeAvatar ? null : avatarBytes ?? state.avatarBytes;
     state = AdminProfile(
-      name: name.trim(),
+      name: nextName,
       email: state.email,
       password: nextPassword,
       avatarBytes: nextAvatar,
@@ -105,15 +141,39 @@ class AuthController extends StateNotifier<bool> {
 
   final SharedPreferences _preferences;
   bool _firebase = false;
+  bool _supabaseEnabled = false;
+  bool _loginInProgress = false;
+  SupabaseAdminService? _supabase;
 
   /// In Firebase mode the Auth SDK owns the session; mirror it into this
   /// notifier so the existing router redirect keeps working unchanged.
   void _attachFirebase(Ref ref) {
     _firebase = ref.read(firebaseEnabledProvider);
+    _supabaseEnabled = ref.read(supabaseEnabledProvider);
+    if (_supabaseEnabled) _supabase = ref.read(supabaseAdminServiceProvider);
     if (!_firebase) return;
-    FirebaseAdminService.instance.authState.listen((signedIn) {
-      state = signedIn;
+    FirebaseAdminService.instance.authState.listen((signedIn) async {
+      if (!signedIn) {
+        state = false;
+        return;
+      }
+      if (_loginInProgress) return;
+      final error = await _verifyAdmin();
+      if (error == null) {
+        state = true;
+      } else {
+        await FirebaseAdminService.instance.signOut();
+        state = false;
+      }
     });
+  }
+
+  Future<String?> _verifyAdmin() async {
+    if (_supabaseEnabled) {
+      return _supabase?.verifyAdmin() ??
+          'Supabase admin service is unavailable.';
+    }
+    return FirebaseAdminService.instance.verifyCurrentAdmin();
   }
 
   Future<String?> login(
@@ -122,10 +182,26 @@ class AuthController extends StateNotifier<bool> {
     bool keepSignedIn,
   ) async {
     if (_firebase) {
-      final error =
-          await FirebaseAdminService.instance.signIn(email, password);
-      if (error == null) state = true;
-      return error;
+      _loginInProgress = true;
+      try {
+        final error = await FirebaseAdminService.instance.signIn(
+          email,
+          password,
+          verifyFirestoreRole: !_supabaseEnabled,
+        );
+        if (error != null) return error;
+        if (_supabaseEnabled) {
+          final adminError = await _verifyAdmin();
+          if (adminError != null) {
+            await FirebaseAdminService.instance.signOut();
+            return adminError;
+          }
+        }
+        state = true;
+        return null;
+      } finally {
+        _loginInProgress = false;
+      }
     }
     await Future<void>.delayed(const Duration(milliseconds: 550));
     final savedPassword =

@@ -35,7 +35,7 @@ class OrderItem {
 
   final String name;
   final String category;
-  final int quantity;
+  final double quantity;
   final double unitPrice;
 
   double get subtotal => quantity * unitPrice;
@@ -79,7 +79,7 @@ class Order {
   double get netRevenue => total - refundAmount;
   bool get contributesToSales =>
       status == OrderStatus.completed || status == OrderStatus.refunded;
-  int get quantity => items.fold(0, (sum, item) => sum + item.quantity);
+  double get quantity => items.fold(0, (sum, item) => sum + item.quantity);
   String get categories =>
       items.map((item) => item.category).toSet().join(', ');
   String get itemNames => items.map((item) => item.name).join(', ');

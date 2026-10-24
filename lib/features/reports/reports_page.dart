@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:http/http.dart' as http;
 import 'package:go_router/go_router.dart';
 import '../../core/theme/theme_extensions.dart';
 import '../../core/utils/export/admin_export_service.dart';
@@ -109,11 +110,16 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
 
   Future<void> _openReport(Report report) async {
     if (report.status == ReportStatus.pending) {
-      await ref.read(appDataProvider.notifier).updateReport(
+      final error = await ref.read(appDataProvider.notifier).updateReport(
             report.id,
             ReportStatus.underReview,
             'Review started by administrator.',
           );
+      if (error != null && mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error)));
+        return;
+      }
     }
     if (!mounted) return;
     final current = ref
@@ -427,6 +433,10 @@ class _ReportTable extends StatelessWidget {
     final rows = values.map(
       (item) {
         return DataRow(
+          color: item.isUnread
+              ? WidgetStatePropertyAll(
+                  colors.infoContainer.withValues(alpha: .45))
+              : null,
           onSelectChanged: (_) => onOpen(item),
           cells: history
               ? [
@@ -481,6 +491,8 @@ class _ReportTable extends StatelessWidget {
                       spacing: 7,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
+                        if (item.isUnread)
+                          const StatusBadge(label: 'New', kind: BadgeKind.info),
                         Text(
                           item.accountIssue,
                           style: TextStyle(
@@ -975,9 +987,14 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
       );
       if (result == null || result.isEmpty || !mounted) return;
       setState(() => processing = true);
-      await ref
+      final error = await ref
           .read(appDataProvider.notifier)
           .updateReport(widget.report.id, value, result);
+      if (error != null && mounted) {
+        setState(() => processing = false);
+        _showError(error);
+        return;
+      }
       if (mounted) {
         final messenger = ScaffoldMessenger.of(context);
         Navigator.pop(context);
@@ -1047,27 +1064,26 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      const Text(
-                        'EVIDENCE ATTACHED (2 IMAGES)',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                        ),
+                      Text(
+                        'EVIDENCE ATTACHED (${widget.report.evidenceUrls.length} IMAGES)',
+                        style: const TextStyle(
+                            fontSize: 10, fontWeight: FontWeight.w800),
                       ),
                       const SizedBox(height: 9),
-                      Row(
-                        children: [
-                          _evidence(
-                            'assets/images/spoiled_produce.png',
-                            'Spoiled produce',
-                          ),
-                          const SizedBox(width: 10),
-                          _evidence(
-                            'assets/images/mobile_conversation.png',
-                            'Mobile conversation',
-                          ),
-                        ],
-                      ),
+                      if (widget.report.evidenceUrls.isEmpty)
+                        const Text('No evidence images attached.')
+                      else
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          children: [
+                            for (var i = 0;
+                                i < widget.report.evidenceUrls.length;
+                                i++)
+                              _evidence(widget.report.evidenceUrls[i],
+                                  'Evidence ${i + 1}'),
+                          ],
+                        ),
                       const SizedBox(height: 16),
                       const Text(
                         'ACCOUNT HISTORY HIGHLIGHTS',
@@ -1479,23 +1495,22 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
         ],
       );
 
-  Widget _evidence(String asset, String label) => Expanded(
+  Widget _evidence(String asset, String label) => SizedBox(
+        width: 280,
         child: InkWell(
           onTap: () => showDialog<void>(
             context: context,
             builder: (_) => _EvidenceViewerDialog(
               initialAsset: asset,
-              evidence: const [
-                _EvidenceItem(
-                  asset: 'assets/images/spoiled_produce.png',
-                  label: 'Spoiled produce',
-                  filename: 'spoiled_produce.png',
-                ),
-                _EvidenceItem(
-                  asset: 'assets/images/mobile_conversation.png',
-                  label: 'Mobile conversation',
-                  filename: 'mobile_conversation.png',
-                ),
+              evidence: [
+                for (var i = 0; i < widget.report.evidenceUrls.length; i++)
+                  _EvidenceItem(
+                    asset: widget.report.evidenceUrls[i],
+                    label: 'Evidence ${i + 1}',
+                    filename: Uri.parse(widget.report.evidenceUrls[i])
+                        .pathSegments
+                        .last,
+                  ),
               ],
             ),
           ),
@@ -1506,7 +1521,7 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
                 borderRadius: BorderRadius.circular(8),
                 child: AspectRatio(
                   aspectRatio: 2.1,
-                  child: Image.asset(
+                  child: Image.network(
                     asset,
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) =>
@@ -1718,11 +1733,14 @@ class _EvidenceViewerDialogState extends State<_EvidenceViewerDialog> {
 
   Future<void> _download() async {
     try {
-      final bytes = await rootBundle.load(_item.asset);
+      final response = await http.get(Uri.parse(_item.asset));
+      if (response.statusCode != 200) {
+        throw StateError('Evidence download failed');
+      }
       await FilePicker.platform.saveFile(
         dialogTitle: 'Save evidence',
         fileName: _item.filename,
-        bytes: bytes.buffer.asUint8List(),
+        bytes: response.bodyBytes,
         type: FileType.image,
       );
     } catch (_) {
@@ -1937,7 +1955,7 @@ class _EvidenceViewerDialogState extends State<_EvidenceViewerDialog> {
                       onInteractionEnd: (_) {
                         if (_isDragging) setState(() => _isDragging = false);
                       },
-                      child: Image.asset(
+                      child: Image.network(
                         _item.asset,
                         key: ValueKey('${_item.asset}-$_reloadToken'),
                         width: double.infinity,
@@ -2063,7 +2081,7 @@ class _EvidenceViewerDialogState extends State<_EvidenceViewerDialog> {
                         ),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(5),
-                          child: Image.asset(item.asset, fit: BoxFit.cover),
+                          child: Image.network(item.asset, fit: BoxFit.cover),
                         ),
                       ),
                       const SizedBox(height: 3),

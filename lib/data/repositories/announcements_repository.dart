@@ -11,7 +11,8 @@ final announcementsProvider = Provider<List<Announcement>>((ref) {
 });
 
 /// Direct domain repository for announcement operations.
-final announcementsRepositoryProvider = Provider<AnnouncementsRepository>((ref) {
+final announcementsRepositoryProvider =
+    Provider<AnnouncementsRepository>((ref) {
   return AnnouncementsRepository(ref);
 });
 

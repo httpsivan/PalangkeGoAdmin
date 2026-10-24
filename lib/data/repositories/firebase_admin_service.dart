@@ -45,9 +45,9 @@ class FirebaseAdminService {
         for (final collection in collections) {
           subscriptions.add(
             _db.collection(collection).snapshots().listen(
-              (_) => controller.add(null),
-              onError: controller.addError,
-            ),
+                  (_) => controller.add(null),
+                  onError: controller.addError,
+                ),
           );
         }
       },
@@ -68,21 +68,26 @@ class FirebaseAdminService {
 
   /// Signs in and verifies the account really is an admin (users doc role).
   /// Returns null on success, else a user-readable error.
-  Future<String?> signIn(String email, String password) async {
+  Future<String?> signIn(String email, String password,
+      {bool verifyFirestoreRole = true}) async {
     try {
       final cred = await _auth.signInWithEmailAndPassword(
         email: email.trim(),
         password: password,
       );
-      final role = await _roleOf(cred.user!.uid);
-      if (role != 'admin') {
-        await _auth.signOut();
-        return 'This account does not have admin access.';
+      if (verifyFirestoreRole) {
+        final role = await _roleOf(cred.user!.uid);
+        if (role != 'admin') {
+          await _auth.signOut();
+          return 'This account does not have admin access.';
+        }
       }
       return null;
     } on FirebaseAuthException catch (e) {
       return switch (e.code) {
-        'invalid-credential' || 'wrong-password' || 'user-not-found' =>
+        'invalid-credential' ||
+        'wrong-password' ||
+        'user-not-found' =>
           'The email or password is incorrect.',
         'invalid-email' => 'That email address is not valid.',
         'too-many-requests' =>
@@ -91,6 +96,17 @@ class FirebaseAdminService {
           'Network error — check your connection and try again.',
         _ => 'Sign-in failed (${e.code}).',
       };
+    }
+  }
+
+  Future<String?> verifyCurrentAdmin() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return 'You are not signed in.';
+    try {
+      if (await _roleOf(uid) == 'admin') return null;
+      return 'This account does not have admin access.';
+    } on FirebaseException catch (e) {
+      return 'Admin access check failed (${e.code}).';
     }
   }
 
@@ -152,6 +168,7 @@ class FirebaseAdminService {
     required String body,
     required String targetAudience,
     DateTime? expiresAt,
+    String? imageUrl,
   }) async {
     try {
       await _db.collection('systemAnnouncements').add({
@@ -160,8 +177,8 @@ class FirebaseAdminService {
         'targetAudience': targetAudience,
         'createdBy': _auth.currentUser?.uid,
         'createdAt': FieldValue.serverTimestamp(),
-        if (expiresAt != null)
-          'expiresAt': Timestamp.fromDate(expiresAt),
+        if (expiresAt != null) 'expiresAt': Timestamp.fromDate(expiresAt),
+        if (imageUrl != null && imageUrl.isNotEmpty) 'imageUrl': imageUrl,
       });
       return null;
     } on FirebaseException catch (e) {
@@ -174,6 +191,9 @@ class FirebaseAdminService {
     required String title,
     required String body,
     required String targetAudience,
+    DateTime? expiresAt,
+    String? imageUrl,
+    bool clearImage = false,
   }) async {
     try {
       await _db.collection('systemAnnouncements').doc(id).update({
@@ -181,6 +201,11 @@ class FirebaseAdminService {
         'body': body,
         'targetAudience': targetAudience,
         'updatedAt': FieldValue.serverTimestamp(),
+        if (expiresAt != null) 'expiresAt': Timestamp.fromDate(expiresAt),
+        if (clearImage)
+          'imageUrl': FieldValue.delete()
+        else if (imageUrl != null && imageUrl.isNotEmpty)
+          'imageUrl': imageUrl,
       });
       return null;
     } on FirebaseException catch (e) {
@@ -249,10 +274,9 @@ class FirebaseAdminService {
       final role = user['role'] as String?;
       final blocked = user['isBlocked'] == true;
       final status = blocked ? AccountStatus.blocked : AccountStatus.active;
-      final name =
-          (user['displayName'] as String?)?.isNotEmpty == true
-              ? user['displayName'] as String
-              : (user['email'] as String? ?? uid);
+      final name = (user['displayName'] as String?)?.isNotEmpty == true
+          ? user['displayName'] as String
+          : (user['email'] as String? ?? uid);
       if (role == 'vendor') {
         final stall = stallById[uid] ?? const <String, dynamic>{};
         vendors.add(Vendor(
@@ -280,8 +304,12 @@ class FirebaseAdminService {
       }
     });
 
-    final applications = [for (final d in kycSnap.docs) _mapApplication(d, usersById, stallById)];
-    final renewals = [for (final d in renewalsSnap.docs) _mapRenewal(d, stallById)];
+    final applications = [
+      for (final d in kycSnap.docs) _mapApplication(d, usersById, stallById)
+    ];
+    final renewals = [
+      for (final d in renewalsSnap.docs) _mapRenewal(d, stallById)
+    ];
     final auditLogs = [for (final d in auditSnap.docs) _mapAudit(d, usersById)];
     final announcements = [for (final d in annSnap.docs) _mapAnnouncement(d)];
 
@@ -324,16 +352,13 @@ class FirebaseAdminService {
     final items = (data['items'] as List<dynamic>? ?? [])
         .map((i) => Map<String, dynamic>.from(i as Map))
         .map((i) => OrderItem(
-              name: (i['productName'] as String?) ??
-                  (i['name'] as String?) ??
-                  '',
+              name:
+                  (i['productName'] as String?) ?? (i['name'] as String?) ?? '',
               category: (i['category'] as String?) ??
                   (i['productCategory'] as String?) ??
                   '',
-              quantity: ((i['quantity'] as num?) ?? 0).round(),
-              unitPrice: ((i['unitPrice'] as num?) ??
-                      (i['price'] as num?) ??
-                      0)
+              quantity: ((i['quantity'] as num?) ?? 0).toDouble(),
+              unitPrice: ((i['unitPrice'] as num?) ?? (i['price'] as num?) ?? 0)
                   .toDouble(),
             ))
         .toList();
@@ -359,23 +384,22 @@ class FirebaseAdminService {
     return Order(
       id: d.id,
       transactionId: stallId,
-      placedAt:
-          _asDate(data['placedAt']) ?? _asDate(data['createdAt']) ?? DateTime.now(),
+      placedAt: _asDate(data['placedAt']) ??
+          _asDate(data['createdAt']) ??
+          DateTime.now(),
       customerName: (data['customerName'] as String?) ?? '',
       vendorName: vendorName,
       stallName: stallName,
       items: items,
-      discounts: ((data['discountAmount'] as num?) ??
-              (data['discount'] as num?) ??
-              0)
-          .toDouble(),
+      discounts:
+          ((data['discountAmount'] as num?) ?? (data['discount'] as num?) ?? 0)
+              .toDouble(),
       deliveryFee: ((data['deliveryFee'] as num?) ?? 0).toDouble(),
       platformFee: ((data['serviceFee'] as num?) ?? 0).toDouble() +
           ((data['priorityFee'] as num?) ?? 0).toDouble(),
-      refundAmount: ((data['refundAmount'] as num?) ??
-              (data['refund'] as num?) ??
-              0)
-          .toDouble(),
+      refundAmount:
+          ((data['refundAmount'] as num?) ?? (data['refund'] as num?) ?? 0)
+              .toDouble(),
       paymentMethod: method,
       paymentStatus: payStatus,
       status: status,
@@ -449,7 +473,8 @@ class FirebaseAdminService {
           stallId,
       stallName: (stall['name'] as String?) ?? 'Unknown stall',
       category: (stall['category'] as String?) ?? 'Uncategorized',
-      expiryDate: _asDate(data['periodEnd']) ?? DateTime.now().add(
+      expiryDate: _asDate(data['periodEnd']) ??
+          DateTime.now().add(
             const Duration(days: 365),
           ),
       status: status,
@@ -496,12 +521,17 @@ class FirebaseAdminService {
       summary: (data['body'] as String?) ?? '',
       audience: switch ((data['targetAudience'] as String?)?.toLowerCase()) {
         'customers' || 'customer' => 'Customers',
-        'stallholders' || 'stall holders' || 'vendors' || 'vendor' => 'Stall Holders',
+        'stallholders' ||
+        'stall holders' ||
+        'vendors' ||
+        'vendor' =>
+          'Stall Holders',
         _ => 'All Users',
       },
       createdAt: _asDate(data['createdAt']) ?? DateTime.now(),
       isDraft: false,
       expiresAt: _asDate(data['expiresAt']),
+      imageUrl: (data['imageUrl'] ?? data['image_url']) as String?,
       createdBy: (data['createdBy'] as String?) ?? 'ADM-001',
     );
   }

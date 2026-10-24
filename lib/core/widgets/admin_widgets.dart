@@ -76,8 +76,8 @@ class AppLogo extends StatelessWidget {
 
     final basketIcon = Image.asset(
       'assets/images/market_basket.png',
-      width: compact ? 44 : 64,
-      height: compact ? 44 : 64,
+      width: compact ? 44 : 72,
+      height: compact ? 44 : 72,
       fit: BoxFit.contain,
       semanticLabel: 'PalengkeGo Market Basket',
       errorBuilder: (context, error, stackTrace) => Icon(
@@ -94,7 +94,7 @@ class AppLogo extends StatelessWidget {
             text: 'Palengke',
             style: GoogleFonts.plusJakartaSans(
               color: primaryTextColor,
-              fontSize: compact ? 19 : 23,
+              fontSize: compact ? 19 : 28,
               fontWeight: FontWeight.w800,
               letterSpacing: -0.4,
             ),
@@ -103,7 +103,7 @@ class AppLogo extends StatelessWidget {
             text: 'Go',
             style: GoogleFonts.plusJakartaSans(
               color: accentColor,
-              fontSize: compact ? 19 : 23,
+              fontSize: compact ? 19 : 28,
               fontWeight: FontWeight.w900,
               letterSpacing: -0.4,
             ),
@@ -111,8 +111,8 @@ class AppLogo extends StatelessWidget {
           if (showAdminBadge) ...[
             WidgetSpan(
               child: Container(
-                margin: const EdgeInsets.only(left: 6, bottom: 2),
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                margin: const EdgeInsets.only(left: 8, bottom: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                 decoration: BoxDecoration(
                   color: accentColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(4),
@@ -122,7 +122,7 @@ class AppLogo extends StatelessWidget {
                   'ADMIN',
                   style: TextStyle(
                     color: accentColor,
-                    fontSize: compact ? 9 : 10,
+                    fontSize: compact ? 9 : 10.5,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 0.8,
                   ),
@@ -140,7 +140,7 @@ class AppLogo extends StatelessWidget {
         color: dark
             ? Colors.white70
             : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-        fontSize: compact ? 7.5 : 8.5,
+        fontSize: compact ? 7.5 : 9.5,
         fontWeight: FontWeight.w700,
         letterSpacing: 1.0,
       ),
@@ -153,7 +153,7 @@ class AppLogo extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           basketIcon,
-          SizedBox(width: compact ? 10 : 12),
+          SizedBox(width: compact ? 10 : 18),
           Flexible(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -772,7 +772,8 @@ class Toolbar extends StatelessWidget {
         decoration: InputDecoration(
           isDense: true,
           filled: true,
-          fillColor: semanticColors(context).hoverSurface.withValues(alpha: 0.95),
+          fillColor:
+              semanticColors(context).hoverSurface.withValues(alpha: 0.95),
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           prefixIcon: Icon(
@@ -1514,12 +1515,16 @@ class ApplicationStatusBadge extends StatelessWidget {
         children: [
           Icon(icon, size: 16, color: color),
           const SizedBox(width: 6),
-          Text(
-            label,
-            style: GoogleFonts.inter(
-              color: color,
-              fontSize: 11.5,
-              fontWeight: FontWeight.bold,
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(
+                color: color,
+                fontSize: 11.5,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ],
@@ -1595,31 +1600,28 @@ class ScrollableDataTable extends StatelessWidget {
                   ),
                 );
 
-            final content = ConstrainedBox(
-              constraints: BoxConstraints(minWidth: tableWidth),
-              child: AnimatedSwitcher(
-                duration: AppMotion.duration(context, AppMotion.component),
-                transitionBuilder: (child, animation) => FadeTransition(
-                  opacity: animation,
-                  child: child,
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minWidth: tableWidth),
+                child: AnimatedSwitcher(
+                  duration: AppMotion.duration(context, AppMotion.component),
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: child,
+                  ),
+                  child: rows.isEmpty
+                      ? KeyedSubtree(
+                          key: const ValueKey('empty'),
+                          child: emptyState,
+                        )
+                      : KeyedSubtree(
+                          key: const ValueKey('rows'),
+                          child: table(tableRows: rows, headingHeight: 48),
+                        ),
                 ),
-                child: rows.isEmpty
-                    ? KeyedSubtree(
-                        key: const ValueKey('empty'),
-                        child: emptyState,
-                      )
-                    : KeyedSubtree(
-                        key: const ValueKey('rows'),
-                        child: table(tableRows: rows, headingHeight: 48),
-                      ),
               ),
             );
-            return horizontalScroll
-                ? SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: content,
-                  )
-                : content;
           },
         ),
       );

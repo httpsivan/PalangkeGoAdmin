@@ -265,7 +265,8 @@ class _NotificationPanelState extends ConsumerState<_NotificationPanel>
                               builder: (context) {
                                 final items = _groupedItems(context, visible);
                                 return ListView.builder(
-                                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+                                  padding:
+                                      const EdgeInsets.fromLTRB(12, 10, 12, 8),
                                   itemCount: items.length,
                                   itemBuilder: (context, index) => items[index],
                                 );

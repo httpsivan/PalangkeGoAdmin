@@ -15,18 +15,21 @@ class MockAdminDataSource {
 
   static const defaultAdminName = 'Kirren Michael Fraginal';
 
-  /// Initial seed state when no local modifications have occurred.
-  static AppDataSeed initialSeeds() => AppDataSeed(
-        vendors: seedVendors(),
-        customers: seedCustomers(),
-        applications: seedApplications(),
-        renewals: seedRenewals(),
-        reports: seedReports(),
-        announcements: seedAnnouncements(),
-        orders: seedOrders(),
-        auditLogs: seedAuditLogs(),
-        suspensions: seedSuspensions(),
-      );
+  static AppDataSeed initialSeeds() {
+    final vendors = seedVendors();
+    return AppDataSeed(
+      vendors: vendors,
+      customers: seedCustomers(),
+      applications: seedApplications(),
+      renewals: seedRenewals(),
+      reports: seedReports(),
+      announcements: seedAnnouncements(),
+      stalls: const [],
+      orders: seedOrders(),
+      auditLogs: seedAuditLogs(),
+      suspensions: seedSuspensions(),
+    );
+  }
 
   /// Restores local overrides, status changes, and audits from SharedPreferences.
   AppDataSeed restore(AppDataSeed initial) {
@@ -48,7 +51,8 @@ class MockAdminDataSource {
                 .toSet();
 
     final unblockedCustomerIds =
-        _preferences.getStringList('unblocked_customers')?.toSet() ?? <String>{};
+        _preferences.getStringList('unblocked_customers')?.toSet() ??
+            <String>{};
 
     final blockedDetails = readBlockedDetails();
 
@@ -70,7 +74,8 @@ class MockAdminDataSource {
         .toSet();
 
     final storedAudits = readAuditLogs();
-    final effectiveAudits = storedAudits.isEmpty ? initial.auditLogs : storedAudits;
+    final effectiveAudits =
+        storedAudits.isEmpty ? initial.auditLogs : storedAudits;
 
     final restoredVendors = initial.vendors
         .map(
@@ -78,8 +83,8 @@ class MockAdminDataSource {
               ? vendor.copyWith(
                   status: AccountStatus.blocked,
                   blockedReason: blockedDetails[vendor.id]?['reason'],
-                  blockedFromReportId:
-                      blockedDetails[vendor.id]?['relatedReportId'],
+                  blockedFromReportId: blockedDetails[vendor.id]
+                      ?['relatedReportId'],
                   blockedAt: DateTime.tryParse(
                     blockedDetails[vendor.id]?['blockedAt'] ?? '',
                   ),
@@ -99,8 +104,8 @@ class MockAdminDataSource {
               ? customer.copyWith(
                   status: AccountStatus.blocked,
                   blockedReason: blockedDetails[customer.id]?['reason'],
-                  blockedFromReportId:
-                      blockedDetails[customer.id]?['relatedReportId'],
+                  blockedFromReportId: blockedDetails[customer.id]
+                      ?['relatedReportId'],
                   blockedAt: DateTime.tryParse(
                     blockedDetails[customer.id]?['blockedAt'] ?? '',
                   ),
@@ -124,6 +129,7 @@ class MockAdminDataSource {
       renewals: restoredRenewals,
       reports: restoredReports,
       announcements: initial.announcements,
+      stalls: initial.stalls,
       orders: initial.orders,
       auditLogs: effectiveAudits,
       suspensions: effectiveSuspensions,
@@ -361,7 +367,8 @@ class MockAdminDataSource {
         startDate: DateTime.parse(map['startDate'] as String),
         endDate: DateTime.parse(map['endDate'] as String),
         administratorId: map['administratorId'] as String,
-        administratorName: map['administratorName'] as String? ?? 'Administrator',
+        administratorName:
+            map['administratorName'] as String? ?? 'Administrator',
         createdAt: DateTime.parse(map['createdAt'] as String),
         note: map['note'] as String,
         notifyUser: map['notifyUser'] as bool,
@@ -381,6 +388,7 @@ class AppDataSeed {
     required this.renewals,
     required this.reports,
     required this.announcements,
+    required this.stalls,
     required this.orders,
     required this.auditLogs,
     required this.suspensions,
@@ -392,6 +400,7 @@ class AppDataSeed {
   final List<RenewalRequest> renewals;
   final List<Report> reports;
   final List<Announcement> announcements;
+  final List<Stall> stalls;
   final List<Order> orders;
   final List<AuditLog> auditLogs;
   final List<Suspension> suspensions;

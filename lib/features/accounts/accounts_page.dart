@@ -288,12 +288,24 @@ class _AccountsPageState extends ConsumerState<AccountsPage> {
                         ? v.relocationRequestedAt != null
                         : status == 'Closed'
                             ? (v.status == AccountStatus.blocked &&
-                                (v.blockedReason?.toLowerCase().contains('stall closed') == true ||
-                                    v.blockedReason?.toLowerCase().contains('closed upon') == true))
+                                (v.blockedReason
+                                            ?.toLowerCase()
+                                            .contains('stall closed') ==
+                                        true ||
+                                    v.blockedReason
+                                            ?.toLowerCase()
+                                            .contains('closed upon') ==
+                                        true))
                             : status == 'Blocked'
                                 ? (v.status == AccountStatus.blocked &&
-                                    !(v.blockedReason?.toLowerCase().contains('stall closed') == true ||
-                                        v.blockedReason?.toLowerCase().contains('closed upon') == true))
+                                    !(v.blockedReason
+                                                ?.toLowerCase()
+                                                .contains('stall closed') ==
+                                            true ||
+                                        v.blockedReason
+                                                ?.toLowerCase()
+                                                .contains('closed upon') ==
+                                            true))
                                 : enumLabel(v.status) == status)) &&
             (stallCategory == 'All Categories' || v.stallType == stallCategory),
       )
@@ -336,12 +348,24 @@ class _AccountsPageState extends ConsumerState<AccountsPage> {
                           ? v.relocationRequestedAt != null
                           : status == 'Closed'
                               ? (v.status == AccountStatus.blocked &&
-                                  (v.blockedReason?.toLowerCase().contains('stall closed') == true ||
-                                      v.blockedReason?.toLowerCase().contains('closed upon') == true))
+                                  (v.blockedReason
+                                              ?.toLowerCase()
+                                              .contains('stall closed') ==
+                                          true ||
+                                      v.blockedReason
+                                              ?.toLowerCase()
+                                              .contains('closed upon') ==
+                                          true))
                               : status == 'Blocked'
                                   ? (v.status == AccountStatus.blocked &&
-                                      !(v.blockedReason?.toLowerCase().contains('stall closed') == true ||
-                                          v.blockedReason?.toLowerCase().contains('closed upon') == true))
+                                      !(v.blockedReason
+                                                  ?.toLowerCase()
+                                                  .contains('stall closed') ==
+                                              true ||
+                                          v.blockedReason
+                                                  ?.toLowerCase()
+                                                  .contains('closed upon') ==
+                                              true))
                                   : enumLabel(v.status) == status)) &&
               (stallCategory == 'All Categories' ||
                   v.stallType == stallCategory),
@@ -646,8 +670,14 @@ class _VendorTable extends StatelessWidget {
                             kind: BadgeKind.info,
                           )
                         : (vendor.status == AccountStatus.blocked &&
-                                (vendor.blockedReason?.toLowerCase().contains('stall closed') == true ||
-                                    vendor.blockedReason?.toLowerCase().contains('closed upon') == true))
+                                (vendor.blockedReason
+                                            ?.toLowerCase()
+                                            .contains('stall closed') ==
+                                        true ||
+                                    vendor.blockedReason
+                                            ?.toLowerCase()
+                                            .contains('closed upon') ==
+                                        true))
                             ? const StatusBadge(
                                 label: 'Closed',
                                 kind: BadgeKind.danger,
@@ -1551,7 +1581,8 @@ class _AccountDetailsDialog extends ConsumerStatefulWidget {
   final Future<void> Function(String notes)? onBlock;
   final Future<void> Function(String notes)? onCloseStall;
   final Future<void> Function(String notes)? onDismissClosure;
-  final Future<void> Function(String newLocation, String? newCategory, String notes)?
+  final Future<void> Function(
+          String newLocation, String? newCategory, String notes)?
       onReassignLocation;
 
   @override
@@ -1712,12 +1743,17 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
   Future<void> _unblock() async {
     if (busy || widget.onUnblock == null) return;
     final isStallClosed = widget.account.accountType == 'Stall Holder' &&
-        (widget.account.blockedReason?.toLowerCase().contains('stall closed') == true ||
-            widget.account.blockedReason?.toLowerCase().contains('closed upon') == true);
+        (widget.account.blockedReason?.toLowerCase().contains('stall closed') ==
+                true ||
+            widget.account.blockedReason
+                    ?.toLowerCase()
+                    .contains('closed upon') ==
+                true);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(isStallClosed ? 'Reopen stall account?' : 'Unblock account?'),
+        title:
+            Text(isStallClosed ? 'Reopen stall account?' : 'Unblock account?'),
         content: Text(
           isStallClosed
               ? 'Reopen the stall account for ${widget.account.name}? The account status will change to Active, allowing the stall holder to resume operations on PalengkeGo.'
@@ -1966,7 +2002,8 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Closure request for ${widget.account.name} dismissed.'),
+          content:
+              Text('Closure request for ${widget.account.name} dismissed.'),
         ),
       );
       Navigator.of(context).pop();
@@ -2286,8 +2323,14 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
                         const SizedBox(width: 8),
                         if (widget.account.accountType == 'Stall Holder' &&
                             widget.account.status == AccountStatus.blocked &&
-                            (widget.account.blockedReason?.toLowerCase().contains('stall closed') == true ||
-                                widget.account.blockedReason?.toLowerCase().contains('closed upon') == true))
+                            (widget.account.blockedReason
+                                        ?.toLowerCase()
+                                        .contains('stall closed') ==
+                                    true ||
+                                widget.account.blockedReason
+                                        ?.toLowerCase()
+                                        .contains('closed upon') ==
+                                    true))
                           const StatusBadge(
                             label: 'Closed & Archived',
                             kind: BadgeKind.danger,
@@ -2559,8 +2602,12 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
   Widget _blockInfo(BuildContext context) {
     final colors = semanticColors(context);
     final isStallClosed = widget.account.accountType == 'Stall Holder' &&
-        (widget.account.blockedReason?.toLowerCase().contains('stall closed') == true ||
-            widget.account.blockedReason?.toLowerCase().contains('closed upon') == true);
+        (widget.account.blockedReason?.toLowerCase().contains('stall closed') ==
+                true ||
+            widget.account.blockedReason
+                    ?.toLowerCase()
+                    .contains('closed upon') ==
+                true);
 
     if (isStallClosed) {
       // Keep permanently closed stalls visually distinct from ordinary blocks.
@@ -2577,7 +2624,8 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
           children: [
             Row(
               children: [
-                Icon(Icons.inventory_2_outlined, size: 17, color: colors.danger),
+                Icon(Icons.inventory_2_outlined,
+                    size: 17, color: colors.danger),
                 const SizedBox(width: 8),
                 Text(
                   'STALL CLOSED & ARCHIVED',
@@ -2594,7 +2642,8 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
             const SizedBox(height: 12),
             _restrictionDetail(
               'Closure Reason',
-              widget.account.blockedReason ?? 'Stall operations closed upon vendor request.',
+              widget.account.blockedReason ??
+                  'Stall operations closed upon vendor request.',
             ),
             if (widget.account.blockedAt != null)
               _restrictionDetail(
@@ -2613,7 +2662,8 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.info_outline, size: 15, color: colors.heroBackground),
+                  Icon(Icons.info_outline,
+                      size: 15, color: colors.heroBackground),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -2879,8 +2929,12 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
 
   Widget _footer(BuildContext context) {
     final isStallClosed = widget.account.accountType == 'Stall Holder' &&
-        (widget.account.blockedReason?.toLowerCase().contains('stall closed') == true ||
-            widget.account.blockedReason?.toLowerCase().contains('closed upon') == true);
+        (widget.account.blockedReason?.toLowerCase().contains('stall closed') ==
+                true ||
+            widget.account.blockedReason
+                    ?.toLowerCase()
+                    .contains('closed upon') ==
+                true);
     final canUnblock = widget.onUnblock != null;
     final canLift = widget.onLift != null;
     final canSuspend = widget.onSuspend != null;
@@ -2904,23 +2958,27 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(22),
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
                   elevation: 0,
                 ),
                 icon: unblocking
                     ? const SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
                       )
-                    : const Icon(Icons.lock_open_rounded, size: 16, color: Colors.white),
+                    : const Icon(Icons.lock_open_rounded,
+                        size: 16, color: Colors.white),
                 label: Text(
                   unblocking
                       ? 'Processing...'
                       : isStallClosed
                           ? 'Reopen Stall'
                           : 'Unblock',
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 12),
                 ),
               ),
             ),
@@ -2929,13 +2987,15 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
               child: OutlinedButton.icon(
                 onPressed: busy ? null : _liftSuspension,
                 style: OutlinedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFEF3C7).withValues(alpha: 0.5),
+                  backgroundColor:
+                      const Color(0xFFFEF3C7).withValues(alpha: 0.5),
                   foregroundColor: const Color(0xFFD97706),
                   side: const BorderSide(color: Color(0xFFFBBF24), width: 1.2),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(22),
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
                 ),
                 icon: lifting
                     ? const SizedBox(
@@ -2946,7 +3006,8 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
                     : const Icon(Icons.lock_open_rounded, size: 16),
                 label: Text(
                   lifting ? 'Lifting...' : 'Lift',
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 12),
                 ),
               ),
             ),
@@ -2955,13 +3016,15 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
               child: OutlinedButton.icon(
                 onPressed: busy ? null : _suspend,
                 style: OutlinedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFEF3C7).withValues(alpha: 0.55),
+                  backgroundColor:
+                      const Color(0xFFFEF3C7).withValues(alpha: 0.55),
                   foregroundColor: const Color(0xFFD97706),
                   side: const BorderSide(color: Color(0xFFFBBF24), width: 1.2),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(22),
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
                 ),
                 icon: suspending
                     ? const SizedBox(
@@ -2969,10 +3032,12 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
                         height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.pause_circle_outline, size: 16, color: Color(0xFFD97706)),
+                    : const Icon(Icons.pause_circle_outline,
+                        size: 16, color: Color(0xFFD97706)),
                 label: Text(
                   suspending ? 'Suspending...' : 'Suspend',
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 12),
                 ),
               ),
             ),
@@ -2983,13 +3048,15 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
               child: OutlinedButton.icon(
                 onPressed: busy ? null : _block,
                 style: OutlinedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFEE2E2).withValues(alpha: 0.55),
+                  backgroundColor:
+                      const Color(0xFFFEE2E2).withValues(alpha: 0.55),
                   foregroundColor: const Color(0xFFDC2626),
                   side: const BorderSide(color: Color(0xFFF87171), width: 1.2),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(22),
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
                 ),
                 icon: blocking
                     ? const SizedBox(
@@ -2997,10 +3064,12 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
                         height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.block_outlined, size: 16, color: Color(0xFFDC2626)),
+                    : const Icon(Icons.block_outlined,
+                        size: 16, color: Color(0xFFDC2626)),
                 label: Text(
                   blocking ? 'Blocking...' : 'Block',
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 12),
                 ),
               ),
             ),
@@ -3016,19 +3085,25 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(22),
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
                   elevation: 0,
                 ),
                 icon: closing
                     ? const SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
                       )
-                    : const Icon(Icons.storefront_outlined, size: 16, color: Colors.white),
+                    : const Icon(Icons.storefront_outlined,
+                        size: 16, color: Colors.white),
                 label: Text(
                   closing ? 'Closing...' : 'Close Stall',
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Colors.white),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                      color: Colors.white),
                 ),
               ),
             ),
@@ -3043,19 +3118,25 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(22),
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
                 elevation: 0,
               ),
               icon: saving
                   ? const SizedBox(
                       width: 16,
                       height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
                     )
-                  : const Icon(Icons.save_rounded, size: 16, color: Colors.white),
+                  : const Icon(Icons.save_rounded,
+                      size: 16, color: Colors.white),
               label: const Text(
                 'Save Changes',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Colors.white),
+                style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                    color: Colors.white),
               ),
             ),
           ),

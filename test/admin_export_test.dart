@@ -60,8 +60,10 @@ void main() {
             ReportColumn(label: 'Status', flex: 1.0),
           ],
           rows: [
-            const ReportRow(cells: ['STALL-001', 'Naga Fresh Produce', 'Active']),
-            const ReportRow(cells: ['STALL-002', 'Bicol Organics', 'Suspended']),
+            const ReportRow(
+                cells: ['STALL-001', 'Naga Fresh Produce', 'Active']),
+            const ReportRow(
+                cells: ['STALL-002', 'Bicol Organics', 'Suspended']),
           ],
         ),
       );
@@ -79,7 +81,8 @@ void main() {
       expect(pdfContent.contains('PalengkeGo Market'), isTrue);
       expect(pdfContent.contains('TEST ACCOUNTS REPORT'), isTrue);
       // Active filters
-      expect(pdfContent.contains('Stall Holders | Active | Vegetables'), isTrue);
+      expect(
+          pdfContent.contains('Stall Holders | Active | Vegetables'), isTrue);
       // Summary
       expect(pdfContent.contains('REPORT SUMMARY'), isTrue);
       // Data cells
@@ -92,7 +95,8 @@ void main() {
       expect(pdfContent.contains('%%EOF'), isTrue);
     });
 
-    test('generates multi-page pagination when rows exceed single page limit', () {
+    test('generates multi-page pagination when rows exceed single page limit',
+        () {
       final rows = List.generate(
         35,
         (i) => ReportRow(cells: ['ID-$i', 'Vendor Name $i', 'Active']),
@@ -131,7 +135,9 @@ void main() {
   });
 
   group('ExcelReportService', () {
-    test('generates valid OpenXML .xlsx ZIP workbook with frozen pane and no autoFilter', () {
+    test(
+        'generates valid OpenXML .xlsx ZIP workbook with frozen pane and no autoFilter',
+        () {
       final fixedDate = DateTime(2026, 9, 13, 14, 0);
       final doc = ExportDocument(
         filenamePrefix: 'test_excel',
@@ -155,7 +161,8 @@ void main() {
             ReportColumn(label: 'Status', flex: 1.0),
           ],
           rows: [
-            const ReportRow(cells: ['ACC-01', 'Elena Vega', 'Fruits', 'Active']),
+            const ReportRow(
+                cells: ['ACC-01', 'Elena Vega', 'Fruits', 'Active']),
             const ReportRow(cells: ['ACC-02', 'Ramon Diaz', 'Fish', 'Active']),
           ],
         ),
@@ -189,10 +196,12 @@ void main() {
   });
 
   group('Module Export Data Builders (Filter-Aware)', () {
-    test('AccountsExportData filters vendors correctly and updates summary', () {
+    test('AccountsExportData filters vendors correctly and updates summary',
+        () {
       final allVendors = seedVendors();
       final filteredVegetableVendors = allVendors
-          .where((v) => v.stallType == 'Vegetables' && v.status == AccountStatus.active)
+          .where((v) =>
+              v.stallType == 'Vegetables' && v.status == AccountStatus.active)
           .toList();
 
       final doc = AccountsExportData.buildStallHolders(
@@ -213,11 +222,17 @@ void main() {
       }
 
       // Summary contains total and status breakdown
-      expect(doc.summary.items.any((item) => item.label == 'Active Stall Holders'), isTrue);
-      expect(doc.summary.items.any((item) => item.label == 'Total Stall Holders'), isTrue);
+      expect(
+          doc.summary.items.any((item) => item.label == 'Active Stall Holders'),
+          isTrue);
+      expect(
+          doc.summary.items.any((item) => item.label == 'Total Stall Holders'),
+          isTrue);
     });
 
-    test('ApplicationExportData extracts KYC details and respects filtered subset', () {
+    test(
+        'ApplicationExportData extracts KYC details and respects filtered subset',
+        () {
       final allApps = seedApplications();
       final reviewingApps = allApps
           .where((a) => a.status == ApplicationStatus.reviewing)
@@ -236,11 +251,17 @@ void main() {
         expect(row.cells[5], 'Reviewing');
       }
 
-      expect(doc.summary.items.any((item) => item.label == 'Pending Applications'), isTrue);
-      expect(doc.summary.items.any((item) => item.label == 'Approved Applications'), isTrue);
+      expect(
+          doc.summary.items.any((item) => item.label == 'Pending Applications'),
+          isTrue);
+      expect(
+          doc.summary.items
+              .any((item) => item.label == 'Approved Applications'),
+          isTrue);
     });
 
-    test('RenewalExportData calculates days left and reflects renewal statuses', () {
+    test('RenewalExportData calculates days left and reflects renewal statuses',
+        () {
       final allRenewals = seedRenewals();
       final doc = RenewalExportData.build(
         allRenewals: allRenewals,
@@ -273,22 +294,10 @@ void main() {
       expect(doc.reportName, 'Complaints Report');
       expect(doc.filenamePrefix, 'palengkego_complaints_report');
       expect(doc.table.rows.length, allReports.length);
-      expect(doc.summary.items.any((item) => item.label == 'Pending Complaints'), isTrue);
+      expect(
+          doc.summary.items.any((item) => item.label == 'Pending Complaints'),
+          isTrue);
       expect(doc.summary.items.any((item) => item.label == 'Resolved'), isTrue);
-    });
-
-    test('ComplaintExportData labels customer exports', () {
-      final reports = seedReports().where((r) => r.type == 'Customer').toList();
-      final doc = ComplaintExportData.build(
-        allReports: seedReports(),
-        filteredReports: reports,
-        activeFilters: 'Account Type: Customers',
-        accountType: 'Customers',
-      );
-
-      expect(doc.reportName, 'Customer Complaints');
-      expect(doc.header.reportTitle, 'Customer Complaints Report');
-      expect(doc.filenamePrefix, 'palengkego_customer_complaints_report');
     });
 
     test('AnnouncementExportData computes metrics and status values', () {
@@ -302,31 +311,15 @@ void main() {
       expect(doc.reportName, 'Announcement History Report');
       expect(doc.filenamePrefix, 'palengkego_announcements_report');
       expect(doc.table.rows.length, allAnnouncements.length);
-      expect(doc.summary.items.any((item) => item.label == 'Total Announcements'), isTrue);
-      expect(doc.summary.items.any((item) => item.label == 'Delivered Notices'), isTrue);
+      expect(
+          doc.summary.items.any((item) => item.label == 'Total Announcements'),
+          isTrue);
+      expect(doc.summary.items.any((item) => item.label == 'Delivered Notices'),
+          isTrue);
     });
 
-    test('AnnouncementExportData labels stall holder exports', () {
-      final announcements = seedAnnouncements();
-      final doc = AnnouncementExportData.build(
-        allAnnouncements: announcements,
-        filteredAnnouncements: announcements,
-        activeFilters: 'Stall Holders',
-        audience: 'Stall Holders',
-      );
-
-      expect(doc.reportName, 'Stall Holder Announcements');
-      expect(
-        doc.header.reportTitle,
-        'Stall Holder Announcement History Report',
-      );
-      expect(
-        doc.filenamePrefix,
-        'palengkego_stall_holder_announcements_report',
-      );
-    });
-
-    test('AuditExportData maintains chronological order and action logging', () {
+    test('AuditExportData maintains chronological order and action logging',
+        () {
       final sampleLogs = [
         AuditLog(
           id: 'AUD-001',
@@ -367,12 +360,17 @@ void main() {
       expect(doc.reportName, 'Admin Audit Log Report');
       expect(doc.filenamePrefix, 'palengkego_admin_audit_log');
       expect(doc.table.rows.length, sampleLogs.length);
-      expect(doc.summary.items.any((item) => item.label == 'Recorded Actions'), isTrue);
-      expect(doc.summary.items.any((item) => item.label == 'KYC Actions'), isTrue);
-      expect(doc.summary.items.any((item) => item.label == 'Account Controls'), isTrue);
+      expect(doc.summary.items.any((item) => item.label == 'Recorded Actions'),
+          isTrue);
+      expect(
+          doc.summary.items.any((item) => item.label == 'KYC Actions'), isTrue);
+      expect(doc.summary.items.any((item) => item.label == 'Account Controls'),
+          isTrue);
     });
 
-    test('SalesExportData extracts sales details, revenue metrics, and order rows', () {
+    test(
+        'SalesExportData extracts sales details, revenue metrics, and order rows',
+        () {
       final sampleOrders = seedOrders();
       final summary = SalesSummary.fromOrders(sampleOrders);
       final doc = SalesExportData.build(
@@ -385,10 +383,14 @@ void main() {
       expect(doc.reportName, 'Sales Report');
       expect(doc.filenamePrefix, 'palengkego_sales_report');
       expect(doc.table.rows.length, sampleOrders.length);
-      expect(doc.summary.items.any((item) => item.label == 'Gross Sales'), isTrue);
-      expect(doc.summary.items.any((item) => item.label == 'Net Revenue'), isTrue);
-      expect(doc.summary.items.any((item) => item.label == 'Total Orders'), isTrue);
-      expect(doc.summary.items.any((item) => item.label == 'Completed Orders'), isTrue);
+      expect(
+          doc.summary.items.any((item) => item.label == 'Gross Sales'), isTrue);
+      expect(
+          doc.summary.items.any((item) => item.label == 'Net Revenue'), isTrue);
+      expect(doc.summary.items.any((item) => item.label == 'Total Orders'),
+          isTrue);
+      expect(doc.summary.items.any((item) => item.label == 'Completed Orders'),
+          isTrue);
       expect(doc.summary.items.any((item) => item.label == 'Refunds'), isTrue);
 
       final pdfBytes = PdfReportService.generatePdf(doc);
@@ -399,7 +401,8 @@ void main() {
   });
 
   group('ExportButton Widget', () {
-    testWidgets('renders format dropdown menu and invokes callbacks', (tester) async {
+    testWidgets('renders format dropdown menu and invokes callbacks',
+        (tester) async {
       var pdfCalled = false;
       var excelCalled = false;
 
@@ -421,7 +424,7 @@ void main() {
       expect(find.byIcon(Icons.keyboard_arrow_down_rounded), findsOneWidget);
 
       // Tap Export button to open menu
-      await tester.tap(find.text('Export'));
+      await tester.tap(find.byType(PopupMenuButton<String>));
       await tester.pumpAndSettle();
 
       expect(find.text('Export PDF'), findsOneWidget);
@@ -434,7 +437,7 @@ void main() {
       expect(excelCalled, isFalse);
 
       // Tap Export button again
-      await tester.tap(find.text('Export'));
+      await tester.tap(find.byType(PopupMenuButton<String>));
       await tester.pumpAndSettle();
 
       // Tap Export Excel

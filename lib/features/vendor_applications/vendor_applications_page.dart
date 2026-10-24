@@ -440,92 +440,105 @@ class _ApplicationTable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = semanticColors(context);
-    final rows = values
-        .map(
-          (item) {
-            final isResolved = item.status == ApplicationStatus.verified ||
-                item.status == ApplicationStatus.rejected ||
-                item.status == ApplicationStatus.invalidDocs;
-            final isNew = !isResolved && newApplicationIds.contains(item.id);
-            return DataRow(
-              color: isNew
-                  ? WidgetStateProperty.resolveWith<Color?>((states) {
-                      if (states.contains(WidgetState.hovered)) {
-                        return colors.info.withValues(alpha: 0.13);
-                      }
-                      return colors.info.withValues(alpha: 0.07);
-                    })
-                  : null,
-              onSelectChanged: (_) => onOpen(item),
-              cells: [
-                DataCell(
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (isNew)
-                        Container(
-                          width: 3.5,
-                          height: 24,
-                          margin: const EdgeInsets.only(right: 8),
-                          decoration: BoxDecoration(
-                            color: colors.info,
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                      Text(
-                        item.id,
-                        style: TextStyle(
-                          color: colors.accent,
-                          fontWeight: FontWeight.w800,
-                        ),
+    final rows = values.map(
+      (item) {
+        final isResolved = item.status == ApplicationStatus.verified ||
+            item.status == ApplicationStatus.rejected ||
+            item.status == ApplicationStatus.invalidDocs;
+        final isNew = !isResolved && newApplicationIds.contains(item.id);
+        return DataRow(
+          color: isNew
+              ? WidgetStateProperty.resolveWith<Color?>((states) {
+                  if (states.contains(WidgetState.hovered)) {
+                    return colors.info.withValues(alpha: 0.13);
+                  }
+                  return colors.info.withValues(alpha: 0.07);
+                })
+              : null,
+          onSelectChanged: (_) => onOpen(item),
+          cells: [
+            DataCell(
+              Row(
+                children: [
+                  if (isNew)
+                    Container(
+                      width: 3.5,
+                      height: 24,
+                      margin: const EdgeInsets.only(right: 8),
+                      decoration: BoxDecoration(
+                        color: colors.info,
+                        borderRadius: BorderRadius.circular(2),
                       ),
-                    ],
-                  ),
-                ),
-                DataCell(
-                  Wrap(
-                    spacing: 7,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      AvatarCircle(name: item.applicant, size: 28),
-                      Text(
-                        item.applicant,
-                        style: isNew
-                            ? const TextStyle(fontWeight: FontWeight.w700)
-                            : null,
+                    ),
+                  Expanded(
+                    child: Text(
+                      item.id,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: colors.accent,
+                        fontWeight: FontWeight.w800,
                       ),
-                      if (isNew)
-                        const StatusBadge(
-                          label: 'NEW',
-                          kind: BadgeKind.info,
-                        ),
-                    ],
+                    ),
                   ),
-                ),
-                DataCell(Text(item.stallName)),
-                DataCell(CategoryBadge(category: item.category)),
-                DataCell(
-                  Text(
-                    DateFormat('MM/dd/yyyy, h:mm a').format(item.submittedAt),
+                ],
+              ),
+            ),
+            DataCell(
+              Row(
+                children: [
+                  AvatarCircle(name: item.applicant, size: 28),
+                  const SizedBox(width: 7),
+                  Expanded(
+                    child: Text(
+                      item.applicant,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: isNew
+                          ? const TextStyle(fontWeight: FontWeight.w700)
+                          : null,
+                    ),
                   ),
-                ),
-                DataCell(
-                  ApplicationStatusBadge(status: item.status),
-                ),
-                DataCell(
-                  TableActionReviewButton(
-                    label: isResolved ? 'View Details' : 'Review',
-                    tooltip: isResolved
-                        ? 'View application details'
-                        : 'Review application',
-                    onPressed: () => onOpen(item),
-                  ),
-                ),
-              ],
-            );
-          },
-        )
-        .toList();
+                  if (isNew)
+                    const Padding(
+                      padding: EdgeInsets.only(left: 6),
+                      child: StatusBadge(
+                        label: 'NEW',
+                        kind: BadgeKind.info,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            DataCell(
+              Text(
+                item.stallName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            DataCell(CategoryBadge(category: item.category)),
+            DataCell(
+              Text(
+                DateFormat('MM/dd/yyyy, h:mm a').format(item.submittedAt),
+              ),
+            ),
+            DataCell(
+              ApplicationStatusBadge(status: item.status),
+            ),
+            DataCell(
+              TableActionReviewButton(
+                label: isResolved ? 'View Details' : 'Review',
+                tooltip: isResolved
+                    ? 'View application details'
+                    : 'Review application',
+                onPressed: () => onOpen(item),
+              ),
+            ),
+          ],
+        );
+      },
+    ).toList();
     return ScrollableDataTable(
       verticalController: verticalController,
       minWidth: 1500,
@@ -533,11 +546,11 @@ class _ApplicationTable extends StatelessWidget {
       emptyState: emptyState,
       columns: const [
         DataColumn(
-          columnWidth: FlexColumnWidth(1.25),
+          columnWidth: FixedColumnWidth(220),
           label: Text('APPLICATION ID'),
         ),
         DataColumn(
-          columnWidth: FlexColumnWidth(1.25),
+          columnWidth: FixedColumnWidth(290),
           label: Text('APPLICANT'),
         ),
         DataColumn(

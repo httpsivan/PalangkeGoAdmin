@@ -1,7 +1,22 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:palengkego_admin/models/admin_notification.dart';
+import 'package:palengkego_admin/data/repositories/notification_repository.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  group('NotificationController', () {
+    test('starts without seeded sample notifications', () async {
+      SharedPreferences.setMockInitialValues({});
+      final preferences = await SharedPreferences.getInstance();
+      final controller = NotificationController(preferences);
+      addTearDown(controller.dispose);
+
+      expect(controller.state, isEmpty);
+    });
+  });
+
   group('NotificationTarget', () {
     test('builds the application detail destination', () {
       const target = NotificationTarget(

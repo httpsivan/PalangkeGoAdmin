@@ -331,19 +331,18 @@ void main() {
     );
   });
 
-  test('renewal requests filtering, badge equality, mutual exclusivity, and sorting',
+  test(
+      'renewal requests filtering, badge equality, mutual exclusivity, and sorting',
       () async {
     SharedPreferences.setMockInitialValues({});
     final preferences = await SharedPreferences.getInstance();
     final controller = AppDataController(preferences, firebaseEnabled: false);
     final renewals = controller.state.renewals;
 
-    final requestsTabItems = renewals
-        .where((r) => r.status == RenewalStatus.reviewing)
-        .toList();
-    final historyTabItems = renewals
-        .where((r) => r.status != RenewalStatus.reviewing)
-        .toList();
+    final requestsTabItems =
+        renewals.where((r) => r.status == RenewalStatus.reviewing).toList();
+    final historyTabItems =
+        renewals.where((r) => r.status != RenewalStatus.reviewing).toList();
 
     // Requests tab only contains pending Under Review renewals
     expect(
@@ -372,8 +371,12 @@ void main() {
       ..sort((a, b) => a.expiryDate.compareTo(b.expiryDate));
     for (int i = 0; i < sortedRequests.length - 1; i++) {
       expect(
-        sortedRequests[i].expiryDate.isBefore(sortedRequests[i + 1].expiryDate) ||
-            sortedRequests[i].expiryDate.isAtSameMomentAs(sortedRequests[i + 1].expiryDate),
+        sortedRequests[i]
+                .expiryDate
+                .isBefore(sortedRequests[i + 1].expiryDate) ||
+            sortedRequests[i]
+                .expiryDate
+                .isAtSameMomentAs(sortedRequests[i + 1].expiryDate),
         isTrue,
       );
     }
@@ -467,7 +470,8 @@ void main() {
     );
     expect(updatedVendor.status, AccountStatus.blocked);
     expect(updatedVendor.closureRequestedAt, isNull);
-    expect(updatedVendor.blockedReason, contains('Stall closed upon vendor request'));
+    expect(updatedVendor.blockedReason,
+        contains('Stall closed upon vendor request'));
 
     // Check audit trail
     final audit = controller.state.auditLogs.first;
@@ -475,7 +479,9 @@ void main() {
     expect(audit.targetEntityId, vendorWithRequest.id);
   });
 
-  test('dismissing vendor closure request keeps vendor active and clears request', () async {
+  test(
+      'dismissing vendor closure request keeps vendor active and clears request',
+      () async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     final controller = AppDataController(prefs, firebaseEnabled: false);
@@ -500,7 +506,8 @@ void main() {
     expect(audit.previousValue, 'Closure Requested');
   });
 
-  test('reassigning stall location updates location, category, and audit trail', () async {
+  test('reassigning stall location updates location, category, and audit trail',
+      () async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     final controller = AppDataController(prefs, firebaseEnabled: false);
@@ -515,29 +522,35 @@ void main() {
       administrativeNotes: 'Approved relocation permit #204',
     );
 
-    final updated = controller.state.vendors.firstWhere((v) => v.id == vendor.id);
+    final updated =
+        controller.state.vendors.firstWhere((v) => v.id == vendor.id);
     expect(updated.location, 'Stall #99, Dry Goods Section');
     expect(updated.stallType, 'Dry Goods');
 
     final audit = controller.state.auditLogs.first;
     expect(audit.action, AuditAction.editAccountStatus);
     expect(audit.previousValue, contains(oldLocation));
-    expect(audit.newValue, contains('Stall #99, Dry Goods Section (Dry Goods)'));
+    expect(
+        audit.newValue, contains('Stall #99, Dry Goods Section (Dry Goods)'));
   });
 
-  test('seeded vendors contain relocation request and archived/closed stall samples', () async {
+  test(
+      'seeded vendors contain relocation request and archived/closed stall samples',
+      () async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     final controller = AppDataController(prefs, firebaseEnabled: false);
 
-    final relocationVendors = controller.state.vendors.where((v) => v.relocationRequestedAt != null);
+    final relocationVendors =
+        controller.state.vendors.where((v) => v.relocationRequestedAt != null);
     expect(relocationVendors.length, greaterThanOrEqualTo(1));
     final sampleRelocation = relocationVendors.first;
     expect(sampleRelocation.relocationTargetLocation, isNotNull);
     expect(sampleRelocation.relocationReason, isNotNull);
 
     final closedStalls = controller.state.vendors.where(
-      (v) => v.status == AccountStatus.blocked &&
+      (v) =>
+          v.status == AccountStatus.blocked &&
           (v.blockedReason?.contains('Stall closed') == true),
     );
     expect(closedStalls.length, greaterThanOrEqualTo(1));
@@ -552,7 +565,8 @@ void main() {
       status: AccountStatus.active,
       administrativeNotes: 'Stall lease reopened per application',
     );
-    final reopened = controller.state.vendors.firstWhere((v) => v.id == sampleClosed.id);
+    final reopened =
+        controller.state.vendors.firstWhere((v) => v.id == sampleClosed.id);
     expect(reopened.status, AccountStatus.active);
     expect(reopened.blockedReason, isNull);
   });

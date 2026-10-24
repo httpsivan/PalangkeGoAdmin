@@ -1,8 +1,8 @@
-import 'dart:typed_data';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -12,6 +12,7 @@ import '../../data/repositories/mock_repository.dart';
 import '../../models/app_models.dart';
 
 const _maxFeatureImageBytes = 5 * 1024 * 1024; // 5 MB
+const _maxPopupGalleryImages = 10;
 
 class AnnouncementDialog extends ConsumerStatefulWidget {
   const AnnouncementDialog({
@@ -65,11 +66,18 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
   }();
 
   late final bool _initialNotifyState = widget.announcementToEdit != null
-      ? widget.announcementToEdit!.notificationType.toLowerCase().contains('push')
+      ? widget.announcementToEdit!.notificationType
+          .toLowerCase()
+          .contains('push')
       : widget.initialNotify;
 
   late final titleController = TextEditingController(text: _initialTitleText);
-  late final bodyController = FormattedTextEditingController(text: _initialBodyText);
+  late final bodyController =
+      FormattedTextEditingController(text: _initialBodyText);
+  late final facebookUrlController = TextEditingController(
+    text: widget.announcementToEdit?.facebookUrl ?? '',
+  );
+  late bool showAsPopup = widget.announcementToEdit?.showAsPopup ?? false;
 
   static String normalizeAudience(String? raw) {
     if (raw == null) return 'All Users';
@@ -92,9 +100,15 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
     if (raw == '1 Day') return '1 Day';
     if (raw == '3 Days') return '3 Days';
     if (raw == '7 Days' || raw == '7 Days (1 Week)') return '7 Days (1 Week)';
-    if (raw == '14 Days' || raw == '14 Days (2 Weeks)') return '14 Days (2 Weeks)';
-    if (raw == '30 Days' || raw == '30 Days (1 Month)') return '30 Days (1 Month)';
-    if (raw == 'Permanent' || raw == 'Permanent (No Expiry)') return 'Permanent (No Expiry)';
+    if (raw == '14 Days' || raw == '14 Days (2 Weeks)') {
+      return '14 Days (2 Weeks)';
+    }
+    if (raw == '30 Days' || raw == '30 Days (1 Month)') {
+      return '30 Days (1 Month)';
+    }
+    if (raw == 'Permanent' || raw == 'Permanent (No Expiry)') {
+      return 'Permanent (No Expiry)';
+    }
     if (raw == 'Custom Range (Calendar)') return 'Custom Range (Calendar)';
     return 'Permanent (No Expiry)';
   }
@@ -109,6 +123,10 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
   String? bodyError;
 
   Uint8List? image;
+  List<Uint8List> popupImageBytes = [];
+  List<String> popupImageUrls = [];
+  List<Uint8List> _initialPopupImageBytes = [];
+  List<String> _initialPopupImageUrls = [];
   Uint8List? originalImageBytes;
   Uint8List? _initialImageBytes;
   String? imageUrl;
@@ -125,14 +143,21 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
     super.initState();
     if (widget.announcementToEdit != null) {
       final item = widget.announcementToEdit!;
-      image = item.imageBytes;
-      originalImageBytes = item.imageBytes;
-      _initialImageBytes = item.imageBytes;
-      imageUrl = item.imageUrl;
-      _initialImageUrl = item.imageUrl;
+      image = item.showAsPopup ? null : item.imageBytes;
+      originalImageBytes = item.showAsPopup ? null : item.imageBytes;
+      _initialImageBytes = item.showAsPopup ? null : item.imageBytes;
+      imageUrl = item.showAsPopup ? null : item.imageUrl;
+      _initialImageUrl = item.showAsPopup ? null : item.imageUrl;
+      popupImageBytes = [...item.popupImageBytes];
+      popupImageUrls = [...item.popupImageUrls];
+      _initialPopupImageBytes = [...item.popupImageBytes];
+      _initialPopupImageUrls = [...item.popupImageUrls];
       if (image != null) {
         imageSizeBytes = image!.lengthInBytes;
-        ui.instantiateImageCodec(image!).then((codec) => codec.getNextFrame()).then((frame) {
+        ui
+            .instantiateImageCodec(image!)
+            .then((codec) => codec.getNextFrame())
+            .then((frame) {
           if (mounted) {
             setState(() {
               imageWidth = frame.image.width;
@@ -164,6 +189,7 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
     bodyController.removeListener(_onFormFieldChanged);
     titleController.dispose();
     bodyController.dispose();
+    facebookUrlController.dispose();
     super.dispose();
   }
 
@@ -174,6 +200,24 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
     if (selectedDuration != _initialDurationText) return true;
     if (customDateRange != null) return true;
     if (notify != _initialNotifyState) return true;
+    if (showAsPopup != (widget.announcementToEdit?.showAsPopup ?? false)) {
+      return true;
+    }
+    final existing = widget.announcementToEdit;
+    if (showAsPopup &&
+        existing != null &&
+        (existing.imageBytes != null ||
+            (existing.imageUrl?.isNotEmpty ?? false))) {
+      return true;
+    }
+    if (facebookUrlController.text.trim() !=
+        (widget.announcementToEdit?.facebookUrl ?? '')) {
+      return true;
+    }
+    if (!listEquals(popupImageUrls, _initialPopupImageUrls) ||
+        !listEquals(popupImageBytes, _initialPopupImageBytes)) {
+      return true;
+    }
     if (image != _initialImageBytes) return true;
     if (imageUrl != _initialImageUrl) return true;
     return false;
@@ -187,9 +231,11 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         title: const Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: Color(0xFFF59E0B), size: 22),
+            Icon(Icons.warning_amber_rounded,
+                color: Color(0xFFF59E0B), size: 22),
             SizedBox(width: 8),
-            Text('Discard Unsaved Changes?', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            Text('Discard Unsaved Changes?',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
           ],
         ),
         content: const Text(
@@ -202,7 +248,8 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
             child: const Text('Keep Editing'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
+            style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFEF4444)),
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('Discard Changes'),
           ),
@@ -222,8 +269,10 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
 
     if (start == end) {
       final insert = '$openTag$closeTag';
-      bodyController.text = text.substring(0, start) + insert + text.substring(start);
-      bodyController.selection = TextSelection.collapsed(offset: start + openTag.length);
+      bodyController.text =
+          text.substring(0, start) + insert + text.substring(start);
+      bodyController.selection =
+          TextSelection.collapsed(offset: start + openTag.length);
       return;
     }
 
@@ -232,9 +281,12 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
     if (selected.toLowerCase().startsWith(openTag.toLowerCase()) &&
         selected.toLowerCase().endsWith(closeTag.toLowerCase()) &&
         selected.length >= openTag.length + closeTag.length) {
-      final unwrapped = selected.substring(openTag.length, selected.length - closeTag.length);
-      bodyController.text = text.substring(0, start) + unwrapped + text.substring(end);
-      bodyController.selection = TextSelection(baseOffset: start, extentOffset: start + unwrapped.length);
+      final unwrapped =
+          selected.substring(openTag.length, selected.length - closeTag.length);
+      bodyController.text =
+          text.substring(0, start) + unwrapped + text.substring(end);
+      bodyController.selection = TextSelection(
+          baseOffset: start, extentOffset: start + unwrapped.length);
       return;
     }
 
@@ -245,14 +297,17 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
           after.toLowerCase() == closeTag.toLowerCase()) {
         final newStart = start - openTag.length;
         final newEnd = end + closeTag.length;
-        bodyController.text = text.substring(0, newStart) + selected + text.substring(newEnd);
-        bodyController.selection = TextSelection(baseOffset: newStart, extentOffset: newStart + selected.length);
+        bodyController.text =
+            text.substring(0, newStart) + selected + text.substring(newEnd);
+        bodyController.selection = TextSelection(
+            baseOffset: newStart, extentOffset: newStart + selected.length);
         return;
       }
     }
 
     final wrapped = '$openTag$selected$closeTag';
-    bodyController.text = text.substring(0, start) + wrapped + text.substring(end);
+    bodyController.text =
+        text.substring(0, start) + wrapped + text.substring(end);
     bodyController.selection = TextSelection(
       baseOffset: start + openTag.length,
       extentOffset: start + openTag.length + selected.length,
@@ -278,8 +333,9 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
     final lines = text.substring(rangeStart, rangeEnd).split('\n');
     final prefixPattern = RegExp(r'^(\s*(?:•|\d+\.)\s*)+');
 
-    final allBulleted = lines.every((l) => l.trim().isEmpty || RegExp(r'^\s*•').hasMatch(l)) &&
-        lines.any((l) => l.trim().isNotEmpty);
+    final allBulleted =
+        lines.every((l) => l.trim().isEmpty || RegExp(r'^\s*•').hasMatch(l)) &&
+            lines.any((l) => l.trim().isNotEmpty);
 
     final newLines = <String>[];
     for (final line in lines) {
@@ -293,10 +349,13 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
     }
 
     final replacement = newLines.join('\n');
-    bodyController.text = text.substring(0, rangeStart) + replacement + text.substring(rangeEnd);
+    bodyController.text =
+        text.substring(0, rangeStart) + replacement + text.substring(rangeEnd);
     if (start == end) {
-      final lineDiff = replacement.length - text.substring(rangeStart, rangeEnd).length;
-      final newOffset = (start + lineDiff).clamp(rangeStart, rangeStart + replacement.length);
+      final lineDiff =
+          replacement.length - text.substring(rangeStart, rangeEnd).length;
+      final newOffset =
+          (start + lineDiff).clamp(rangeStart, rangeStart + replacement.length);
       bodyController.selection = TextSelection.collapsed(offset: newOffset);
     } else {
       bodyController.selection = TextSelection(
@@ -321,7 +380,8 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
     final lines = text.substring(rangeStart, rangeEnd).split('\n');
     final prefixPattern = RegExp(r'^(\s*(?:•|\d+\.)\s*)+');
 
-    final allNumbered = lines.every((l) => l.trim().isEmpty || RegExp(r'^\s*\d+\.').hasMatch(l)) &&
+    final allNumbered = lines.every(
+            (l) => l.trim().isEmpty || RegExp(r'^\s*\d+\.').hasMatch(l)) &&
         lines.any((l) => l.trim().isNotEmpty);
 
     final newLines = <String>[];
@@ -338,10 +398,13 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
     }
 
     final replacement = newLines.join('\n');
-    bodyController.text = text.substring(0, rangeStart) + replacement + text.substring(rangeEnd);
+    bodyController.text =
+        text.substring(0, rangeStart) + replacement + text.substring(rangeEnd);
     if (start == end) {
-      final lineDiff = replacement.length - text.substring(rangeStart, rangeEnd).length;
-      final newOffset = (start + lineDiff).clamp(rangeStart, rangeStart + replacement.length);
+      final lineDiff =
+          replacement.length - text.substring(rangeStart, rangeEnd).length;
+      final newOffset =
+          (start + lineDiff).clamp(rangeStart, rangeStart + replacement.length);
       bodyController.selection = TextSelection.collapsed(offset: newOffset);
     } else {
       bodyController.selection = TextSelection(
@@ -364,7 +427,8 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: const Text('Insert Link', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+        title: const Text('Insert Link',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -388,9 +452,11 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0F522E)),
+            style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF0F522E)),
             onPressed: () => Navigator.pop(
               ctx,
               (labelController.text.trim(), urlController.text.trim()),
@@ -416,8 +482,10 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
     final start = sel.start >= 0 ? sel.start : text.length;
     final end = sel.start >= 0 ? sel.end : text.length;
 
-    bodyController.text = text.substring(0, start) + htmlLink + text.substring(end);
-    bodyController.selection = TextSelection.collapsed(offset: start + htmlLink.length);
+    bodyController.text =
+        text.substring(0, start) + htmlLink + text.substring(end);
+    bodyController.selection =
+        TextSelection.collapsed(offset: start + htmlLink.length);
   }
 
   String _formatBytes(int bytes) {
@@ -481,6 +549,82 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
       });
     }
   }
+
+  void _clearAnnouncementCardImage() {
+    image = null;
+    originalImageBytes = null;
+    imageUrl = null;
+    imageName = null;
+    imageSizeBytes = null;
+    imageWidth = null;
+    imageHeight = null;
+  }
+
+  void _setShowAsPopup(bool value) {
+    setState(() {
+      showAsPopup = value;
+      if (value) _clearAnnouncementCardImage();
+    });
+  }
+
+  Future<void> pickPopupImages() async {
+    final remaining =
+        _maxPopupGalleryImages - popupImageUrls.length - popupImageBytes.length;
+    if (remaining <= 0) return;
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: true,
+      withData: true,
+    );
+    if (!mounted || result == null) return;
+    if (result.files.length > remaining) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('A popup can contain up to 10 images.')),
+      );
+      return;
+    }
+    final selected = <Uint8List>[];
+    for (final file in result.files) {
+      final bytes = file.bytes;
+      if (bytes == null || bytes.isEmpty) continue;
+      if (bytes.lengthInBytes > _maxFeatureImageBytes) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${file.name} is larger than 5 MB.')),
+        );
+        return;
+      }
+      selected.add(bytes);
+    }
+    if (selected.isNotEmpty) {
+      setState(() => popupImageBytes.addAll(selected));
+    }
+  }
+
+  Widget _popupImageTile(
+          {required Widget image, required VoidCallback onRemove}) =>
+      SizedBox(
+        width: 88,
+        height: 112,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: image,
+            ),
+            Positioned(
+              top: 2,
+              right: 2,
+              child: IconButton.filledTonal(
+                tooltip: 'Remove image',
+                visualDensity: VisualDensity.compact,
+                onPressed: onRemove,
+                icon: const Icon(Icons.close, size: 16),
+              ),
+            ),
+          ],
+        ),
+      );
 
   Future<void> editImage() async {
     Uint8List? bytes = originalImageBytes ?? image;
@@ -578,7 +722,8 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                       ),
                       IconButton(
                         onPressed: () => Navigator.of(dialogCtx).pop(),
-                        icon: const Icon(Icons.close_rounded, color: Colors.white),
+                        icon: const Icon(Icons.close_rounded,
+                            color: Colors.white),
                         tooltip: 'Close preview',
                       ),
                     ],
@@ -587,7 +732,8 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                 const Divider(height: 1, color: Colors.white24),
                 Flexible(
                   child: ClipRRect(
-                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(14)),
+                    borderRadius: const BorderRadius.vertical(
+                        bottom: Radius.circular(14)),
                     child: Container(
                       color: const Color(0xFF020617),
                       alignment: Alignment.center,
@@ -605,6 +751,9 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                                 errorBuilder: (_, __, ___) => Image.network(
                                   imageUrl!,
                                   fit: BoxFit.contain,
+                                  errorBuilder: (_, __, ___) => const Center(
+                                      child: Icon(Icons.broken_image_outlined,
+                                          semanticLabel: 'Image unavailable')),
                                 ),
                               ),
                       ),
@@ -699,7 +848,9 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
 
   Future<void> save(bool draft) async {
     if (!draft && !_validate()) return;
-    if (draft && titleController.text.trim().isEmpty && bodyController.text.trim().isEmpty) {
+    if (draft &&
+        titleController.text.trim().isEmpty &&
+        bodyController.text.trim().isEmpty) {
       setState(() {
         titleError = 'Please add a title or body to save draft.';
       });
@@ -727,7 +878,8 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
       computedExpiresAt = now.add(const Duration(days: 14));
     } else if (selectedDuration.startsWith('30 Days')) {
       computedExpiresAt = now.add(const Duration(days: 30));
-    } else if (selectedDuration == 'Custom Range (Calendar)' && customDateRange != null) {
+    } else if (selectedDuration == 'Custom Range (Calendar)' &&
+        customDateRange != null) {
       final end = customDateRange!.end;
       computedExpiresAt = DateTime(end.year, end.month, end.day, 23, 59, 59);
     } else {
@@ -748,7 +900,12 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
             : (existing.state == 'Draft' ? 'Sent' : existing.state),
         imageBytes: image,
         imageUrl: imageUrl,
-        clearImage: image == null && (imageUrl == null || imageUrl!.isEmpty),
+        showAsPopup: showAsPopup,
+        facebookUrl: facebookUrlController.text.trim(),
+        popupImageUrls: popupImageUrls,
+        popupImageBytes: popupImageBytes,
+        clearImage: showAsPopup ||
+            (image == null && (imageUrl == null || imageUrl!.isEmpty)),
       );
       await ref.read(appDataProvider.notifier).updateAnnouncement(updated);
       if (!mounted) return;
@@ -758,7 +915,8 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
         SnackBar(
           content: Row(
             children: const [
-              Icon(Icons.check_circle_outline_rounded, color: Colors.white, size: 18),
+              Icon(Icons.check_circle_outline_rounded,
+                  color: Colors.white, size: 18),
               SizedBox(width: 8),
               Text('Announcement updated successfully.'),
             ],
@@ -770,24 +928,37 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
       return;
     }
 
-    await ref.read(appDataProvider.notifier).addAnnouncement(
-          Announcement(
-            id: 'ANN-${DateTime.now().millisecondsSinceEpoch}',
-            title: titleController.text.trim(),
-            summary: bodyController.text.trim(),
-            audience: audience,
-            createdAt: DateTime.now(),
-            expiresAt: computedExpiresAt,
-            isDraft: draft,
-            notificationType: notify ? 'Push notification' : 'In-app notice',
-            state: draft ? 'Draft' : 'Queued locally',
-            createdBy: profile.name,
-            recipientCount: recipients,
-            deliveredCount: draft ? 0 : (notify ? recipients : 0),
-            imageBytes: image,
-            imageUrl: imageUrl,
-          ),
-        );
+    try {
+      await ref.read(appDataProvider.notifier).addAnnouncement(
+            Announcement(
+              id: 'ANN-${DateTime.now().millisecondsSinceEpoch}',
+              title: titleController.text.trim(),
+              summary: bodyController.text.trim(),
+              audience: audience,
+              createdAt: DateTime.now(),
+              expiresAt: computedExpiresAt,
+              isDraft: draft,
+              notificationType: notify ? 'Push notification' : 'In-app notice',
+              state: draft ? 'Draft' : 'Queued locally',
+              createdBy: profile.name,
+              recipientCount: recipients,
+              deliveredCount: draft ? 0 : (notify ? recipients : 0),
+              imageBytes: image,
+              imageUrl: imageUrl,
+              showAsPopup: showAsPopup,
+              facebookUrl: facebookUrlController.text.trim(),
+              popupImageUrls: popupImageUrls,
+              popupImageBytes: popupImageBytes,
+            ),
+          );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not save announcement: $error')),
+      );
+      return;
+    }
     if (!mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     Navigator.pop(context);
@@ -795,7 +966,8 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
       SnackBar(
         content: Row(
           children: [
-            const Icon(Icons.check_circle_outline_rounded, color: Colors.white, size: 18),
+            const Icon(Icons.check_circle_outline_rounded,
+                color: Colors.white, size: 18),
             const SizedBox(width: 8),
             Text(
               draft
@@ -818,7 +990,9 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final badgeLabel = isEditMode
-        ? (widget.announcementToEdit!.isDraft ? 'Editing Draft' : 'Editing Post')
+        ? (widget.announcementToEdit!.isDraft
+            ? 'Editing Draft'
+            : 'Editing Post')
         : 'Draft Mode';
 
     return PopScope(
@@ -842,7 +1016,8 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
             width: 750,
             constraints: BoxConstraints(
               maxWidth: 750,
-              maxHeight: math.min(760.0, MediaQuery.sizeOf(context).height * 0.92),
+              maxHeight:
+                  math.min(760.0, MediaQuery.sizeOf(context).height * 0.92),
             ),
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF1E293B) : Colors.white,
@@ -855,7 +1030,8 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                 ),
               ],
               border: Border.all(
-                color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                color:
+                    isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
               ),
             ),
             child: Column(
@@ -870,12 +1046,16 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                         width: 36,
                         height: 36,
                         decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF123D31) : const Color(0xFFE6F4EA),
+                          color: isDark
+                              ? const Color(0xFF123D31)
+                              : const Color(0xFFE6F4EA),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Icon(
                           Icons.edit_note_rounded,
-                          color: isDark ? const Color(0xFF24C58A) : const Color(0xFF0F522E),
+                          color: isDark
+                              ? const Color(0xFF24C58A)
+                              : const Color(0xFF0F522E),
                           size: 22,
                         ),
                       ),
@@ -887,21 +1067,30 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                           runSpacing: 4,
                           children: [
                             Text(
-                              isEditMode ? 'Edit Announcement' : 'Compose New Announcement',
+                              isEditMode
+                                  ? 'Edit Announcement'
+                                  : 'Compose New Announcement',
                               style: TextStyle(
                                 fontSize: 17,
                                 fontWeight: FontWeight.w700,
-                                color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                color: isDark
+                                    ? Colors.white
+                                    : const Color(0xFF0F172A),
                                 letterSpacing: -0.2,
                               ),
                             ),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 3),
                               decoration: BoxDecoration(
-                                color: isDark ? const Color(0xFF493619) : const Color(0xFFFEF3C7),
+                                color: isDark
+                                    ? const Color(0xFF493619)
+                                    : const Color(0xFFFEF3C7),
                                 borderRadius: BorderRadius.circular(20),
                                 border: Border.all(
-                                  color: isDark ? const Color(0xFF785418) : const Color(0xFFFDE68A),
+                                  color: isDark
+                                      ? const Color(0xFF785418)
+                                      : const Color(0xFFFDE68A),
                                 ),
                               ),
                               child: Text(
@@ -909,7 +1098,9 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w700,
-                                  color: isDark ? const Color(0xFFFFBF55) : const Color(0xFF92400E),
+                                  color: isDark
+                                      ? const Color(0xFFFFBF55)
+                                      : const Color(0xFF92400E),
                                 ),
                               ),
                             ),
@@ -925,7 +1116,8 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                         icon: Icon(
                           Icons.close_rounded,
                           size: 20,
-                          color: isDark ? Colors.white70 : const Color(0xFF64748B),
+                          color:
+                              isDark ? Colors.white70 : const Color(0xFF64748B),
                         ),
                         tooltip: 'Close',
                       ),
@@ -935,7 +1127,9 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                 Divider(
                   height: 1,
                   thickness: 1,
-                  color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                  color: isDark
+                      ? const Color(0xFF334155)
+                      : const Color(0xFFE2E8F0),
                 ),
 
                 // Scrollable Body Form
@@ -951,7 +1145,9 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                             Icon(
                               Icons.description_outlined,
                               size: 18,
-                              color: isDark ? const Color(0xFF24C58A) : const Color(0xFF0F522E),
+                              color: isDark
+                                  ? const Color(0xFF24C58A)
+                                  : const Color(0xFF0F522E),
                             ),
                             const SizedBox(width: 8),
                             Text(
@@ -959,7 +1155,9 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                               style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w700,
-                                color: isDark ? Colors.white : const Color(0xFF1E293B),
+                                color: isDark
+                                    ? Colors.white
+                                    : const Color(0xFF1E293B),
                               ),
                             ),
                           ],
@@ -972,7 +1170,9 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                           style: TextStyle(
                             fontSize: 12.5,
                             fontWeight: FontWeight.w600,
-                            color: isDark ? Colors.white70 : const Color(0xFF334155),
+                            color: isDark
+                                ? Colors.white70
+                                : const Color(0xFF334155),
                           ),
                         ),
                         const SizedBox(height: 6),
@@ -980,27 +1180,35 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                           controller: titleController,
                           style: TextStyle(
                             fontSize: 14,
-                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                            color:
+                                isDark ? Colors.white : const Color(0xFF0F172A),
                           ),
                           decoration: InputDecoration(
                             hintText: 'e.g. New Market Guidelines',
                             hintStyle: TextStyle(
                               fontSize: 13.5,
-                              color: isDark ? Colors.white38 : const Color(0xFF94A3B8),
+                              color: isDark
+                                  ? Colors.white38
+                                  : const Color(0xFF94A3B8),
                             ),
                             filled: true,
-                            fillColor: isDark ? const Color(0xFF0F172A) : Colors.white,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            fillColor:
+                                isDark ? const Color(0xFF0F172A) : Colors.white,
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 12),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
-                              borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                              borderSide:
+                                  const BorderSide(color: Color(0xFFCBD5E1)),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
                               borderSide: BorderSide(
                                 color: titleError != null
                                     ? const Color(0xFFEF4444)
-                                    : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                                    : (isDark
+                                        ? const Color(0xFF334155)
+                                        : const Color(0xFFE2E8F0)),
                               ),
                             ),
                             focusedBorder: OutlineInputBorder(
@@ -1014,7 +1222,8 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                             ),
                             errorBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
-                              borderSide: const BorderSide(color: Color(0xFFEF4444)),
+                              borderSide:
+                                  const BorderSide(color: Color(0xFFEF4444)),
                             ),
                           ),
                         ),
@@ -1022,7 +1231,10 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                           const SizedBox(height: 4),
                           Text(
                             titleError!,
-                            style: const TextStyle(fontSize: 11, color: Color(0xFFEF4444), fontWeight: FontWeight.w500),
+                            style: const TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFFEF4444),
+                                fontWeight: FontWeight.w500),
                           ),
                         ],
 
@@ -1041,7 +1253,9 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                                     Icon(
                                       Icons.people_outline_rounded,
                                       size: 16,
-                                      color: isDark ? const Color(0xFF24C58A) : const Color(0xFF0F522E),
+                                      color: isDark
+                                          ? const Color(0xFF24C58A)
+                                          : const Color(0xFF0F522E),
                                     ),
                                     const SizedBox(width: 6),
                                     Text(
@@ -1049,7 +1263,9 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                                       style: TextStyle(
                                         fontSize: 12.5,
                                         fontWeight: FontWeight.w600,
-                                        color: isDark ? Colors.white70 : const Color(0xFF334155),
+                                        color: isDark
+                                            ? Colors.white70
+                                            : const Color(0xFF334155),
                                       ),
                                     ),
                                   ],
@@ -1060,40 +1276,58 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                                   isExpanded: true,
                                   style: TextStyle(
                                     fontSize: 13.5,
-                                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                    color: isDark
+                                        ? Colors.white
+                                        : const Color(0xFF0F172A),
                                   ),
                                   decoration: InputDecoration(
                                     filled: true,
-                                    fillColor: isDark ? const Color(0xFF0F172A) : Colors.white,
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                    fillColor: isDark
+                                        ? const Color(0xFF0F172A)
+                                        : Colors.white,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 14, vertical: 12),
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(8),
-                                      borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                                      borderSide: const BorderSide(
+                                          color: Color(0xFFCBD5E1)),
                                     ),
                                     enabledBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(8),
                                       borderSide: BorderSide(
-                                        color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                                        color: isDark
+                                            ? const Color(0xFF334155)
+                                            : const Color(0xFFE2E8F0),
                                       ),
                                     ),
                                     focusedBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(8),
                                       borderSide: BorderSide(
-                                        color: isDark ? const Color(0xFF24C58A) : const Color(0xFF0F522E),
+                                        color: isDark
+                                            ? const Color(0xFF24C58A)
+                                            : const Color(0xFF0F522E),
                                         width: 1.5,
                                       ),
                                     ),
                                   ),
-                                  items: const ['All Users', 'Stall Holders', 'Customers']
+                                  items: const [
+                                    'All Users',
+                                    'Stall Holders',
+                                    'Customers'
+                                  ]
                                       .map(
                                         (val) => DropdownMenuItem(
                                           value: val,
-                                          child: Text(val, overflow: TextOverflow.ellipsis),
+                                          child: Text(val,
+                                              overflow: TextOverflow.ellipsis),
                                         ),
                                       )
                                       .toList(),
                                   onChanged: (val) {
-                                    if (val != null) setState(() => audience = normalizeAudience(val));
+                                    if (val != null) {
+                                      setState(() =>
+                                          audience = normalizeAudience(val));
+                                    }
                                   },
                                 ),
                               ],
@@ -1107,7 +1341,9 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                                     Icon(
                                       Icons.calendar_today_outlined,
                                       size: 15,
-                                      color: isDark ? const Color(0xFF24C58A) : const Color(0xFF0F522E),
+                                      color: isDark
+                                          ? const Color(0xFF24C58A)
+                                          : const Color(0xFF0F522E),
                                     ),
                                     const SizedBox(width: 6),
                                     Flexible(
@@ -1116,7 +1352,9 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                                         style: TextStyle(
                                           fontSize: 12.5,
                                           fontWeight: FontWeight.w600,
-                                          color: isDark ? Colors.white70 : const Color(0xFF334155),
+                                          color: isDark
+                                              ? Colors.white70
+                                              : const Color(0xFF334155),
                                         ),
                                       ),
                                     ),
@@ -1124,31 +1362,42 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                                 ),
                                 const SizedBox(height: 6),
                                 DropdownButtonFormField<String>(
-                                  initialValue: normalizeDuration(selectedDuration),
+                                  initialValue:
+                                      normalizeDuration(selectedDuration),
                                   isExpanded: true,
                                   menuMaxHeight: 260,
                                   style: TextStyle(
                                     fontSize: 13.5,
-                                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                    color: isDark
+                                        ? Colors.white
+                                        : const Color(0xFF0F172A),
                                   ),
                                   decoration: InputDecoration(
                                     filled: true,
-                                    fillColor: isDark ? const Color(0xFF0F172A) : Colors.white,
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                    fillColor: isDark
+                                        ? const Color(0xFF0F172A)
+                                        : Colors.white,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 14, vertical: 12),
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(8),
-                                      borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                                      borderSide: const BorderSide(
+                                          color: Color(0xFFCBD5E1)),
                                     ),
                                     enabledBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(8),
                                       borderSide: BorderSide(
-                                        color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                                        color: isDark
+                                            ? const Color(0xFF334155)
+                                            : const Color(0xFFE2E8F0),
                                       ),
                                     ),
                                     focusedBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(8),
                                       borderSide: BorderSide(
-                                        color: isDark ? const Color(0xFF24C58A) : const Color(0xFF0F522E),
+                                        color: isDark
+                                            ? const Color(0xFF24C58A)
+                                            : const Color(0xFF0F522E),
                                         width: 1.5,
                                       ),
                                     ),
@@ -1165,7 +1414,8 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                                       .map(
                                         (val) => DropdownMenuItem(
                                           value: val,
-                                          child: Text(val, overflow: TextOverflow.ellipsis),
+                                          child: Text(val,
+                                              overflow: TextOverflow.ellipsis),
                                         ),
                                       )
                                       .toList(),
@@ -1176,18 +1426,28 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                                       final start = DateUtils.dateOnly(now);
                                       final picked = await showDatePicker(
                                         context: context,
-                                        initialDate: customDateRange?.end ?? now.add(const Duration(days: 7)),
+                                        initialDate: customDateRange?.end ??
+                                            now.add(const Duration(days: 7)),
                                         firstDate: start,
-                                        lastDate: now.add(const Duration(days: 365)),
-                                        barrierColor: Colors.black.withValues(alpha: 0.45),
+                                        lastDate:
+                                            now.add(const Duration(days: 365)),
+                                        barrierColor: Colors.black
+                                            .withValues(alpha: 0.45),
                                         builder: _buildFloatingDatePicker,
                                       );
                                       if (picked != null) {
                                         setState(() {
-                                          selectedDuration = 'Custom Range (Calendar)';
+                                          selectedDuration =
+                                              'Custom Range (Calendar)';
                                           customDateRange = DateTimeRange(
                                             start: start,
-                                            end: DateTime(picked.year, picked.month, picked.day, 23, 59, 59),
+                                            end: DateTime(
+                                                picked.year,
+                                                picked.month,
+                                                picked.day,
+                                                23,
+                                                59,
+                                                59),
                                           );
                                         });
                                       }
@@ -1196,14 +1456,18 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                                     }
                                   },
                                 ),
-                                if (customDateRange != null && selectedDuration == 'Custom Range (Calendar)') ...[
+                                if (customDateRange != null &&
+                                    selectedDuration ==
+                                        'Custom Range (Calendar)') ...[
                                   const SizedBox(height: 5),
                                   Text(
                                     'Active: $_customDurationLabel',
                                     style: TextStyle(
                                       fontSize: 11,
                                       fontWeight: FontWeight.w600,
-                                      color: isDark ? const Color(0xFF24C58A) : const Color(0xFF0F522E),
+                                      color: isDark
+                                          ? const Color(0xFF24C58A)
+                                          : const Color(0xFF0F522E),
                                     ),
                                   ),
                                 ],
@@ -1233,227 +1497,389 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
 
                         const SizedBox(height: 18),
 
-                        // Feature Image Section
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.image_outlined,
-                              size: 16,
-                              color: isDark ? const Color(0xFF24C58A) : const Color(0xFF0F522E),
+                        Material(
+                          color: Colors.transparent,
+                          child: SwitchListTile.adaptive(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Show as an in-app popup'),
+                            subtitle: const Text(
+                              'Display this announcement once per day to its audience.',
                             ),
-                            const SizedBox(width: 6),
-                            Flexible(
-                              child: Text(
-                                'Feature Image (Optional)',
-                                style: TextStyle(
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w600,
-                                  color: isDark ? Colors.white70 : const Color(0xFF334155),
+                            value: showAsPopup,
+                            onChanged: _setShowAsPopup,
+                          ),
+                        ),
+                        if (showAsPopup) ...[
+                          const SizedBox(height: 6),
+                          TextField(
+                            controller: facebookUrlController,
+                            keyboardType: TextInputType.url,
+                            decoration: const InputDecoration(
+                              labelText: 'Facebook post link (optional)',
+                              hintText: 'https://www.facebook.com/...',
+                              prefixIcon: Icon(Icons.link),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              const Expanded(
+                                child: Text(
+                                  'Popup Gallery (up to 10 images)',
+                                  style: TextStyle(fontWeight: FontWeight.w600),
                                 ),
                               ),
+                              OutlinedButton.icon(
+                                onPressed: popupImageUrls.length +
+                                            popupImageBytes.length >=
+                                        _maxPopupGalleryImages
+                                    ? null
+                                    : pickPopupImages,
+                                icon: const Icon(
+                                    Icons.add_photo_alternate_outlined),
+                                label: const Text('Add photos'),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'These images appear as swipeable slides in the app popup. Each image must be 5 MB or smaller.',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isDark
+                                  ? Colors.white54
+                                  : const Color(0xFF64748B),
+                            ),
+                          ),
+                          if (popupImageUrls.isNotEmpty ||
+                              popupImageBytes.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                ...popupImageUrls.asMap().entries.map(
+                                      (entry) => _popupImageTile(
+                                        image: Image.network(
+                                          entry.value,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) =>
+                                              const Icon(Icons.broken_image),
+                                        ),
+                                        onRemove: () => setState(() =>
+                                            popupImageUrls.removeAt(entry.key)),
+                                      ),
+                                    ),
+                                ...popupImageBytes.asMap().entries.map(
+                                      (entry) => _popupImageTile(
+                                        image: Image.memory(
+                                          entry.value,
+                                          fit: BoxFit.cover,
+                                        ),
+                                        onRemove: () => setState(() =>
+                                            popupImageBytes
+                                                .removeAt(entry.key)),
+                                      ),
+                                    ),
+                              ],
                             ),
                           ],
-                        ),
-                        const SizedBox(height: 6),
+                          const SizedBox(height: 12),
+                        ],
 
-                        (image == null && (imageUrl == null || imageUrl!.isEmpty))
-                            ? InkWell(
-                                onTap: pick,
-                                borderRadius: BorderRadius.circular(10),
-                                child: CustomPaint(
-                                  painter: _DashedBorderPainter(
-                                    color: isDark ? const Color(0xFF24C58A) : const Color(0xFF86EFAC),
-                                    radius: 10,
-                                  ),
-                                  child: Container(
-                                    width: double.infinity,
-                                    padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-                                    decoration: BoxDecoration(
-                                      color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF0FDF4),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        const Icon(
-                                          Icons.cloud_upload_outlined,
-                                          color: Color(0xFF16A34A),
-                                          size: 30,
-                                        ),
-                                        const SizedBox(height: 6),
-                                        Text(
-                                          'Drag and drop an image, or click to upload',
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600,
-                                            color: isDark ? Colors.white : const Color(0xFF1E293B),
-                                          ),
-                                          textAlign: TextAlign.center,
-                                        ),
-                                        const SizedBox(height: 3),
-                                        Text(
-                                          'Recommended size: 1200 × 600px (Max 5MB)',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: isDark ? Colors.white54 : const Color(0xFF64748B),
-                                          ),
-                                          textAlign: TextAlign.center,
-                                        ),
-                                      ],
-                                    ),
+                        if (!showAsPopup) ...[
+                          // Feature Image Section
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.image_outlined,
+                                size: 16,
+                                color: isDark
+                                    ? const Color(0xFF24C58A)
+                                    : const Color(0xFF0F522E),
+                              ),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  'Feature Image (Optional)',
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark
+                                        ? Colors.white70
+                                        : const Color(0xFF334155),
                                   ),
                                 ),
-                              )
-                            : Container(
-                                width: double.infinity,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF0F172A),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+
+                          (image == null &&
+                                  (imageUrl == null || imageUrl!.isEmpty))
+                              ? InkWell(
+                                  onTap: pick,
                                   borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: colors.subtleBorder),
-                                ),
-                                clipBehavior: Clip.antiAlias,
-                                child: Column(
-                                  children: [
-                                    AspectRatio(
-                                      aspectRatio: (imageWidth != null && imageHeight != null && imageHeight! > 0)
-                                          ? (imageWidth! / imageHeight!)
-                                          : (1200 / 600),
-                                      child: Stack(
-                                        fit: StackFit.expand,
+                                  child: CustomPaint(
+                                    painter: _DashedBorderPainter(
+                                      color: isDark
+                                          ? const Color(0xFF24C58A)
+                                          : const Color(0xFF86EFAC),
+                                      radius: 10,
+                                    ),
+                                    child: Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 20, horizontal: 16),
+                                      decoration: BoxDecoration(
+                                        color: isDark
+                                            ? const Color(0xFF0F172A)
+                                            : const Color(0xFFF0FDF4),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
                                         children: [
-                                          InkWell(
-                                            onTap: () => _showRealSizeDialog(context),
-                                            child: image != null
-                                                ? Image.memory(
-                                                    image!,
-                                                    fit: BoxFit.cover,
-                                                  )
-                                                : Image.asset(
-                                                    imageUrl!,
-                                                    fit: BoxFit.cover,
-                                                    errorBuilder: (_, __, ___) => Image.network(
+                                          const Icon(
+                                            Icons.cloud_upload_outlined,
+                                            color: Color(0xFF16A34A),
+                                            size: 30,
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Text(
+                                            'Drag and drop an image, or click to upload',
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                              color: isDark
+                                                  ? Colors.white
+                                                  : const Color(0xFF1E293B),
+                                            ),
+                                            textAlign: TextAlign.center,
+                                          ),
+                                          const SizedBox(height: 3),
+                                          Text(
+                                            'Recommended size: 1200 × 600px (Max 5MB)',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: isDark
+                                                  ? Colors.white54
+                                                  : const Color(0xFF64748B),
+                                            ),
+                                            textAlign: TextAlign.center,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : Container(
+                                  width: double.infinity,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF0F172A),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border:
+                                        Border.all(color: colors.subtleBorder),
+                                  ),
+                                  clipBehavior: Clip.antiAlias,
+                                  child: Column(
+                                    children: [
+                                      AspectRatio(
+                                        aspectRatio: (imageWidth != null &&
+                                                imageHeight != null &&
+                                                imageHeight! > 0)
+                                            ? (imageWidth! / imageHeight!)
+                                            : (1200 / 600),
+                                        child: Stack(
+                                          fit: StackFit.expand,
+                                          children: [
+                                            InkWell(
+                                              onTap: () =>
+                                                  _showRealSizeDialog(context),
+                                              child: image != null
+                                                  ? Image.memory(
+                                                      image!,
+                                                      fit: BoxFit.cover,
+                                                    )
+                                                  : Image.asset(
                                                       imageUrl!,
                                                       fit: BoxFit.cover,
+                                                      errorBuilder:
+                                                          (_, __, ___) =>
+                                                              Image.network(
+                                                        imageUrl!,
+                                                        fit: BoxFit.cover,
+                                                        errorBuilder: (_, __,
+                                                                ___) =>
+                                                            const Center(
+                                                                child: Icon(
+                                                                    Icons
+                                                                        .broken_image_outlined,
+                                                                    semanticLabel:
+                                                                        'Image unavailable')),
+                                                      ),
                                                     ),
+                                            ),
+                                            Positioned(
+                                              top: 8,
+                                              left: 8,
+                                              child: Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 4),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.black
+                                                      .withValues(alpha: 0.75),
+                                                  borderRadius:
+                                                      BorderRadius.circular(6),
+                                                ),
+                                                child: Text(
+                                                  '${imageWidth ?? 1200} × ${imageHeight ?? 600} px',
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 10.5,
+                                                    fontWeight: FontWeight.w600,
                                                   ),
-                                          ),
-                                          Positioned(
-                                            top: 8,
-                                            left: 8,
-                                            child: Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                              decoration: BoxDecoration(
-                                                color: Colors.black.withValues(alpha: 0.75),
-                                                borderRadius: BorderRadius.circular(6),
-                                              ),
-                                              child: Text(
-                                                '${imageWidth ?? 1200} × ${imageHeight ?? 600} px',
-                                                style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 10.5,
-                                                  fontWeight: FontWeight.w600,
                                                 ),
                                               ),
                                             ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                      color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
-                                      child: Row(
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              imageName ?? 'Feature Image Loaded',
-                                              style: TextStyle(
-                                                fontSize: 11.5,
-                                                fontWeight: FontWeight.w600,
-                                                color: isDark ? Colors.white : const Color(0xFF334155),
-                                              ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          OutlinedButton.icon(
-                                            onPressed: editImage,
-                                            icon: Icon(
-                                              Icons.crop_rounded,
-                                              size: 14,
-                                              color: isDark ? const Color(0xFF24C58A) : const Color(0xFF0F522E),
-                                            ),
-                                            label: Text(
-                                              'Edit Picture',
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                color: isDark ? Colors.white : const Color(0xFF0F522E),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 12, vertical: 8),
+                                        color: isDark
+                                            ? const Color(0xFF1E293B)
+                                            : const Color(0xFFF8FAFC),
+                                        child: Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                imageName ??
+                                                    'Feature Image Loaded',
+                                                style: TextStyle(
+                                                  fontSize: 11.5,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: isDark
+                                                      ? Colors.white
+                                                      : const Color(0xFF334155),
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
                                               ),
                                             ),
-                                            style: OutlinedButton.styleFrom(
-                                              side: BorderSide(
-                                                color: isDark ? const Color(0xFF33415E) : const Color(0xFFCBD5E1),
+                                            const SizedBox(width: 8),
+                                            OutlinedButton.icon(
+                                              onPressed: editImage,
+                                              icon: Icon(
+                                                Icons.crop_rounded,
+                                                size: 14,
+                                                color: isDark
+                                                    ? const Color(0xFF24C58A)
+                                                    : const Color(0xFF0F522E),
                                               ),
-                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                              minimumSize: Size.zero,
-                                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 6),
-                                          OutlinedButton.icon(
-                                            onPressed: pick,
-                                            icon: Icon(
-                                              Icons.refresh_rounded,
-                                              size: 14,
-                                              color: isDark ? Colors.white70 : const Color(0xFF334155),
-                                            ),
-                                            label: Text(
-                                              'Replace Image',
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                color: isDark ? Colors.white : const Color(0xFF334155),
+                                              label: Text(
+                                                'Edit Picture',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: isDark
+                                                      ? Colors.white
+                                                      : const Color(0xFF0F522E),
+                                                ),
+                                              ),
+                                              style: OutlinedButton.styleFrom(
+                                                side: BorderSide(
+                                                  color: isDark
+                                                      ? const Color(0xFF33415E)
+                                                      : const Color(0xFFCBD5E1),
+                                                ),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 10,
+                                                        vertical: 6),
+                                                minimumSize: Size.zero,
+                                                tapTargetSize:
+                                                    MaterialTapTargetSize
+                                                        .shrinkWrap,
                                               ),
                                             ),
-                                            style: OutlinedButton.styleFrom(
-                                              side: BorderSide(
-                                                color: isDark ? const Color(0xFF33415E) : const Color(0xFFCBD5E1),
+                                            const SizedBox(width: 6),
+                                            OutlinedButton.icon(
+                                              onPressed: pick,
+                                              icon: Icon(
+                                                Icons.refresh_rounded,
+                                                size: 14,
+                                                color: isDark
+                                                    ? Colors.white70
+                                                    : const Color(0xFF334155),
                                               ),
-                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                              minimumSize: Size.zero,
-                                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 6),
-                                          OutlinedButton.icon(
-                                            onPressed: () => setState(() {
-                                              image = null;
-                                              originalImageBytes = null;
-                                              imageUrl = null;
-                                              imageName = null;
-                                              imageSizeBytes = null;
-                                              imageWidth = null;
-                                              imageHeight = null;
-                                            }),
-                                            icon: const Icon(Icons.delete_outline_rounded, size: 14, color: Color(0xFFEF4444)),
-                                            label: const Text('Remove', style: TextStyle(fontSize: 11, color: Color(0xFFEF4444))),
-                                            style: OutlinedButton.styleFrom(
-                                              side: BorderSide(
-                                                color: isDark ? const Color(0xFF7F1D1D) : const Color(0xFFFCA5A5),
+                                              label: Text(
+                                                'Replace Image',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: isDark
+                                                      ? Colors.white
+                                                      : const Color(0xFF334155),
+                                                ),
                                               ),
-                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                              minimumSize: Size.zero,
-                                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                              style: OutlinedButton.styleFrom(
+                                                side: BorderSide(
+                                                  color: isDark
+                                                      ? const Color(0xFF33415E)
+                                                      : const Color(0xFFCBD5E1),
+                                                ),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 10,
+                                                        vertical: 6),
+                                                minimumSize: Size.zero,
+                                                tapTargetSize:
+                                                    MaterialTapTargetSize
+                                                        .shrinkWrap,
+                                              ),
                                             ),
-                                          ),
-                                        ],
+                                            const SizedBox(width: 6),
+                                            OutlinedButton.icon(
+                                              onPressed: () => setState(() {
+                                                _clearAnnouncementCardImage();
+                                              }),
+                                              icon: const Icon(
+                                                  Icons.delete_outline_rounded,
+                                                  size: 14,
+                                                  color: Color(0xFFEF4444)),
+                                              label: const Text('Remove',
+                                                  style: TextStyle(
+                                                      fontSize: 11,
+                                                      color:
+                                                          Color(0xFFEF4444))),
+                                              style: OutlinedButton.styleFrom(
+                                                side: BorderSide(
+                                                  color: isDark
+                                                      ? const Color(0xFF7F1D1D)
+                                                      : const Color(0xFFFCA5A5),
+                                                ),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 10,
+                                                        vertical: 6),
+                                                minimumSize: Size.zero,
+                                                tapTargetSize:
+                                                    MaterialTapTargetSize
+                                                        .shrinkWrap,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
-                              ),
 
-                        const SizedBox(height: 18),
+                          const SizedBox(height: 18),
+                        ],
 
                         // Message Body Rich Text Editor Section
                         Row(
@@ -1461,7 +1887,9 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                             Icon(
                               Icons.edit_note_rounded,
                               size: 18,
-                              color: isDark ? const Color(0xFF24C58A) : const Color(0xFF0F522E),
+                              color: isDark
+                                  ? const Color(0xFF24C58A)
+                                  : const Color(0xFF0F522E),
                             ),
                             const SizedBox(width: 6),
                             Text(
@@ -1469,7 +1897,9 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                               style: TextStyle(
                                 fontSize: 12.5,
                                 fontWeight: FontWeight.w600,
-                                color: isDark ? Colors.white70 : const Color(0xFF334155),
+                                color: isDark
+                                    ? Colors.white70
+                                    : const Color(0xFF334155),
                               ),
                             ),
                           ],
@@ -1478,12 +1908,15 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
 
                         Container(
                           decoration: BoxDecoration(
-                            color: isDark ? const Color(0xFF0F172A) : Colors.white,
+                            color:
+                                isDark ? const Color(0xFF0F172A) : Colors.white,
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(
                               color: bodyError != null
                                   ? const Color(0xFFEF4444)
-                                  : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                                  : (isDark
+                                      ? const Color(0xFF334155)
+                                      : const Color(0xFFE2E8F0)),
                             ),
                           ),
                           child: Column(
@@ -1493,17 +1926,23 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                               Container(
                                 height: 40,
                                 decoration: BoxDecoration(
-                                  color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
-                                  borderRadius: const BorderRadius.vertical(top: Radius.circular(9)),
+                                  color: isDark
+                                      ? const Color(0xFF1E293B)
+                                      : const Color(0xFFF8FAFC),
+                                  borderRadius: const BorderRadius.vertical(
+                                      top: Radius.circular(9)),
                                   border: Border(
                                     bottom: BorderSide(
-                                      color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                                      color: isDark
+                                          ? const Color(0xFF334155)
+                                          : const Color(0xFFE2E8F0),
                                     ),
                                   ),
                                 ),
                                 child: SingleChildScrollView(
                                   scrollDirection: Axis.horizontal,
-                                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                                  padding:
+                                      const EdgeInsets.symmetric(horizontal: 6),
                                   child: Row(
                                     children: [
                                       IconButton(
@@ -1512,7 +1951,9 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                                         icon: Icon(
                                           Icons.format_bold_rounded,
                                           size: 17,
-                                          color: isDark ? Colors.white : const Color(0xFF334155),
+                                          color: isDark
+                                              ? Colors.white
+                                              : const Color(0xFF334155),
                                         ),
                                       ),
                                       IconButton(
@@ -1521,7 +1962,9 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                                         icon: Icon(
                                           Icons.format_italic_rounded,
                                           size: 17,
-                                          color: isDark ? Colors.white : const Color(0xFF334155),
+                                          color: isDark
+                                              ? Colors.white
+                                              : const Color(0xFF334155),
                                         ),
                                       ),
                                       IconButton(
@@ -1530,7 +1973,9 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                                         icon: Icon(
                                           Icons.format_underlined_rounded,
                                           size: 17,
-                                          color: isDark ? Colors.white : const Color(0xFF334155),
+                                          color: isDark
+                                              ? Colors.white
+                                              : const Color(0xFF334155),
                                         ),
                                       ),
                                       IconButton(
@@ -1539,7 +1984,9 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                                         icon: Icon(
                                           Icons.format_list_bulleted_rounded,
                                           size: 17,
-                                          color: isDark ? Colors.white : const Color(0xFF334155),
+                                          color: isDark
+                                              ? Colors.white
+                                              : const Color(0xFF334155),
                                         ),
                                       ),
                                       IconButton(
@@ -1548,7 +1995,9 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                                         icon: Icon(
                                           Icons.format_list_numbered_rounded,
                                           size: 17,
-                                          color: isDark ? Colors.white : const Color(0xFF334155),
+                                          color: isDark
+                                              ? Colors.white
+                                              : const Color(0xFF334155),
                                         ),
                                       ),
                                       IconButton(
@@ -1557,29 +2006,40 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                                         icon: Icon(
                                           Icons.link_rounded,
                                           size: 17,
-                                          color: isDark ? Colors.white : const Color(0xFF334155),
+                                          color: isDark
+                                              ? Colors.white
+                                              : const Color(0xFF334155),
                                         ),
                                       ),
                                       const SizedBox(width: 12),
                                       TextButton.icon(
-                                        onPressed: () => setState(() => isPreviewMode = !isPreviewMode),
+                                        onPressed: () => setState(() =>
+                                            isPreviewMode = !isPreviewMode),
                                         icon: Icon(
-                                          isPreviewMode ? Icons.edit_outlined : Icons.visibility_outlined,
+                                          isPreviewMode
+                                              ? Icons.edit_outlined
+                                              : Icons.visibility_outlined,
                                           size: 15,
-                                          color: isDark ? const Color(0xFF24C58A) : const Color(0xFF0F522E),
+                                          color: isDark
+                                              ? const Color(0xFF24C58A)
+                                              : const Color(0xFF0F522E),
                                         ),
                                         label: Text(
                                           isPreviewMode ? 'Edit' : 'Preview',
                                           style: TextStyle(
                                             fontSize: 12,
                                             fontWeight: FontWeight.w600,
-                                            color: isDark ? const Color(0xFF24C58A) : const Color(0xFF0F522E),
+                                            color: isDark
+                                                ? const Color(0xFF24C58A)
+                                                : const Color(0xFF0F522E),
                                           ),
                                         ),
                                         style: TextButton.styleFrom(
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 10, vertical: 4),
                                           minimumSize: Size.zero,
-                                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                          tapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
                                         ),
                                       ),
                                     ],
@@ -1596,24 +2056,30 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                                   style: TextStyle(
                                     fontSize: 14,
                                     height: 1.45,
-                                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                    color: isDark
+                                        ? Colors.white
+                                        : const Color(0xFF0F172A),
                                   ),
                                   decoration: InputDecoration(
                                     border: InputBorder.none,
                                     fillColor: Colors.transparent,
                                     filled: true,
                                     contentPadding: const EdgeInsets.all(12),
-                                    hintText: 'Enter announcement message content...',
+                                    hintText:
+                                        'Enter announcement message content...',
                                     hintStyle: TextStyle(
                                       fontSize: 13.5,
-                                      color: isDark ? Colors.white38 : const Color(0xFF94A3B8),
+                                      color: isDark
+                                          ? Colors.white38
+                                          : const Color(0xFF94A3B8),
                                     ),
                                   ),
                                 )
                               else
                                 Container(
                                   padding: const EdgeInsets.all(14),
-                                  constraints: const BoxConstraints(minHeight: 110),
+                                  constraints:
+                                      const BoxConstraints(minHeight: 110),
                                   child: FormattedSelectableText(
                                     bodyController.text.isEmpty
                                         ? '*(Empty message body)*'
@@ -1621,14 +2087,17 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                                     style: TextStyle(
                                       fontSize: 14,
                                       height: 1.45,
-                                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                      color: isDark
+                                          ? Colors.white
+                                          : const Color(0xFF0F172A),
                                     ),
                                   ),
                                 ),
 
                               // Character Counter & Error Row
                               Padding(
-                                padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+                                padding:
+                                    const EdgeInsets.fromLTRB(12, 4, 12, 8),
                                 child: Row(
                                   children: [
                                     if (bodyError != null)
@@ -1651,7 +2120,9 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                                         fontWeight: FontWeight.w500,
                                         color: bodyController.text.length > 1000
                                             ? const Color(0xFFEF4444)
-                                            : (isDark ? Colors.white54 : const Color(0xFF64748B)),
+                                            : (isDark
+                                                ? Colors.white54
+                                                : const Color(0xFF64748B)),
                                       ),
                                     ),
                                   ],
@@ -1668,7 +2139,9 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                 Divider(
                   height: 1,
                   thickness: 1,
-                  color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                  color: isDark
+                      ? const Color(0xFF334155)
+                      : const Color(0xFFE2E8F0),
                 ),
 
                 // Footer
@@ -1677,7 +2150,8 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                   child: LayoutBuilder(
                     builder: (context, constraints) {
                       final notifyRow = ConstrainedBox(
-                        constraints: BoxConstraints(maxWidth: constraints.maxWidth),
+                        constraints:
+                            BoxConstraints(maxWidth: constraints.maxWidth),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -1686,9 +2160,13 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                               height: 20,
                               child: Checkbox(
                                 value: notify,
-                                activeColor: isDark ? const Color(0xFF24C58A) : const Color(0xFF0F522E),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                                onChanged: (val) => setState(() => notify = val ?? false),
+                                activeColor: isDark
+                                    ? const Color(0xFF24C58A)
+                                    : const Color(0xFF0F522E),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(4)),
+                                onChanged: (val) =>
+                                    setState(() => notify = val ?? false),
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -1698,24 +2176,30 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                                 style: TextStyle(
                                   fontSize: 12.5,
                                   fontWeight: FontWeight.w500,
-                                  color: isDark ? Colors.white70 : const Color(0xFF334155),
+                                  color: isDark
+                                      ? Colors.white70
+                                      : const Color(0xFF334155),
                                 ),
                               ),
                             ),
                             const SizedBox(width: 5),
                             Tooltip(
-                              message: 'Sends an instant push notification to all users on the mobile app upon saving.',
+                              message:
+                                  'Sends an instant push notification to all users on the mobile app upon saving.',
                               child: Icon(
                                 Icons.info_outline,
                                 size: 15,
-                                color: isDark ? Colors.white70 : const Color(0xFF64748B),
+                                color: isDark
+                                    ? Colors.white70
+                                    : const Color(0xFF64748B),
                               ),
                             ),
                           ],
                         ),
                       );
 
-                      final isSaveDisabled = loading || (isEditMode && !isDirty);
+                      final isSaveDisabled =
+                          loading || (isEditMode && !isDirty);
 
                       final buttons = [
                         OutlinedButton.icon(
@@ -1723,16 +2207,23 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                           icon: Icon(
                             Icons.description_outlined,
                             size: 16,
-                            color: isDark ? Colors.white70 : const Color(0xFF334155),
+                            color: isDark
+                                ? Colors.white70
+                                : const Color(0xFF334155),
                           ),
                           label: const Text('Save as Draft'),
                           style: OutlinedButton.styleFrom(
-                            backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
-                            foregroundColor: isDark ? Colors.white : const Color(0xFF334155),
+                            backgroundColor:
+                                isDark ? const Color(0xFF0F172A) : Colors.white,
+                            foregroundColor:
+                                isDark ? Colors.white : const Color(0xFF334155),
                             side: BorderSide(
-                              color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                              color: isDark
+                                  ? const Color(0xFF334155)
+                                  : const Color(0xFFCBD5E1),
                             ),
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
                             minimumSize: const Size(0, 42),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8),
@@ -1751,21 +2242,27 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                                   ),
                                 )
                               : Icon(
-                                  isEditMode ? Icons.check_rounded : Icons.send_rounded,
+                                  isEditMode
+                                      ? Icons.check_rounded
+                                      : Icons.send_rounded,
                                   size: 16,
                                   color: Colors.white,
                                 ),
                           label: Text(
                             loading
                                 ? 'Saving…'
-                                : (isEditMode ? 'Save Changes' : 'Send Announcement'),
+                                : (isEditMode
+                                    ? 'Save Changes'
+                                    : 'Send Announcement'),
                             style: const TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
                           style: FilledButton.styleFrom(
-                            backgroundColor: isDark ? const Color(0xFF10B981) : const Color(0xFF059669),
+                            backgroundColor: isDark
+                                ? const Color(0xFF10B981)
+                                : const Color(0xFF059669),
                             foregroundColor: Colors.white,
                             disabledBackgroundColor: isDark
                                 ? const Color(0xFF334155)
@@ -1773,7 +2270,8 @@ class _AnnouncementDialogState extends ConsumerState<AnnouncementDialog> {
                             disabledForegroundColor: isDark
                                 ? Colors.white38
                                 : const Color(0xFF94A3B8),
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 12),
                             minimumSize: const Size(0, 42),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8),
@@ -1821,7 +2319,8 @@ class AnnouncementImageCropDialog extends StatefulWidget {
 
 enum _CropDragTarget { none, move, topLeft, topRight, bottomLeft, bottomRight }
 
-class _AnnouncementImageCropDialogState extends State<AnnouncementImageCropDialog> {
+class _AnnouncementImageCropDialogState
+    extends State<AnnouncementImageCropDialog> {
   late final Future<ui.Image> _decodedImage = _decodeImage(widget.bytes);
 
   Rect? _imageRect;
@@ -1901,7 +2400,9 @@ class _AnnouncementImageCropDialogState extends State<AnnouncementImageCropDialo
   }
 
   void _onPanUpdate(DragUpdateDetails details) {
-    if (_imageRect == null || _cropRect == null || _activeDrag == _CropDragTarget.none) {
+    if (_imageRect == null ||
+        _cropRect == null ||
+        _activeDrag == _CropDragTarget.none) {
       return;
     }
     final delta = details.delta;
@@ -1989,10 +2490,14 @@ class _AnnouncementImageCropDialogState extends State<AnnouncementImageCropDialo
     final scaleX = source.width / img.width;
     final scaleY = source.height / img.height;
 
-    final srcLeft = ((crop.left - img.left) * scaleX).clamp(0.0, source.width.toDouble());
-    final srcTop = ((crop.top - img.top) * scaleY).clamp(0.0, source.height.toDouble());
-    final srcWidth = (crop.width * scaleX).clamp(1.0, source.width.toDouble() - srcLeft);
-    final srcHeight = (crop.height * scaleY).clamp(1.0, source.height.toDouble() - srcTop);
+    final srcLeft =
+        ((crop.left - img.left) * scaleX).clamp(0.0, source.width.toDouble());
+    final srcTop =
+        ((crop.top - img.top) * scaleY).clamp(0.0, source.height.toDouble());
+    final srcWidth =
+        (crop.width * scaleX).clamp(1.0, source.width.toDouble() - srcLeft);
+    final srcHeight =
+        (crop.height * scaleY).clamp(1.0, source.height.toDouble() - srcTop);
 
     const outputWidth = 1200;
     const outputHeight = 600;
@@ -2025,8 +2530,12 @@ class _AnnouncementImageCropDialogState extends State<AnnouncementImageCropDialo
 
   MouseCursor get _cursor => switch (_hoverTarget) {
         _CropDragTarget.move => SystemMouseCursors.move,
-        _CropDragTarget.topLeft || _CropDragTarget.bottomRight => SystemMouseCursors.resizeUpLeftDownRight,
-        _CropDragTarget.topRight || _CropDragTarget.bottomLeft => SystemMouseCursors.resizeUpRightDownLeft,
+        _CropDragTarget.topLeft ||
+        _CropDragTarget.bottomRight =>
+          SystemMouseCursors.resizeUpLeftDownRight,
+        _CropDragTarget.topRight ||
+        _CropDragTarget.bottomLeft =>
+          SystemMouseCursors.resizeUpRightDownLeft,
         _CropDragTarget.none => SystemMouseCursors.basic,
       };
 
@@ -2105,7 +2614,9 @@ class _AnnouncementImageCropDialogState extends State<AnnouncementImageCropDialo
                               source: source,
                               imageRect: _imageRect!,
                               cropRect: _cropRect!,
-                              accentColor: isDark ? const Color(0xFF10B981) : const Color(0xFF0F522E),
+                              accentColor: isDark
+                                  ? const Color(0xFF10B981)
+                                  : const Color(0xFF0F522E),
                             ),
                           ),
                         ),
@@ -2117,16 +2628,19 @@ class _AnnouncementImageCropDialogState extends State<AnnouncementImageCropDialo
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 5),
                       decoration: BoxDecoration(
                         color: colors.infoContainer.withValues(alpha: 0.5),
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: colors.info.withValues(alpha: 0.3)),
+                        border: Border.all(
+                            color: colors.info.withValues(alpha: 0.3)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.aspect_ratio_rounded, size: 14, color: colors.info),
+                          Icon(Icons.aspect_ratio_rounded,
+                              size: 14, color: colors.info),
                           const SizedBox(width: 5),
                           Text(
                             'Target: 1200 × 600 px (2:1)',
@@ -2142,7 +2656,8 @@ class _AnnouncementImageCropDialogState extends State<AnnouncementImageCropDialo
                     const Spacer(),
                     TextButton.icon(
                       style: TextButton.styleFrom(
-                        foregroundColor: isDark ? colors.secondaryText : colors.primaryText,
+                        foregroundColor:
+                            isDark ? colors.secondaryText : colors.primaryText,
                       ),
                       onPressed: () {
                         setState(() {
@@ -2150,7 +2665,8 @@ class _AnnouncementImageCropDialogState extends State<AnnouncementImageCropDialo
                         });
                       },
                       icon: const Icon(Icons.restart_alt_rounded, size: 16),
-                      label: const Text('Reset Crop', style: TextStyle(fontSize: 11)),
+                      label: const Text('Reset Crop',
+                          style: TextStyle(fontSize: 11)),
                     ),
                   ],
                 ),
@@ -2162,7 +2678,8 @@ class _AnnouncementImageCropDialogState extends State<AnnouncementImageCropDialo
       actions: [
         TextButton(
           style: TextButton.styleFrom(
-            foregroundColor: isDark ? const Color(0xFFFF7A84) : const Color(0xFFEF4444),
+            foregroundColor:
+                isDark ? const Color(0xFFFF7A84) : const Color(0xFFEF4444),
           ),
           onPressed: () => Navigator.of(context).pop(),
           child: const Text(
@@ -2174,16 +2691,16 @@ class _AnnouncementImageCropDialogState extends State<AnnouncementImageCropDialo
           future: _decodedImage,
           builder: (context, snapshot) => FilledButton.icon(
             style: FilledButton.styleFrom(
-              backgroundColor: isDark ? const Color(0xFF10B981) : const Color(0xFF059669),
+              backgroundColor:
+                  isDark ? const Color(0xFF10B981) : const Color(0xFF059669),
               foregroundColor: Colors.white,
-              disabledBackgroundColor: isDark
-                  ? const Color(0xFF334155)
-                  : const Color(0xFFCBD5E1),
-              disabledForegroundColor: isDark
-                  ? Colors.white38
-                  : const Color(0xFF94A3B8),
+              disabledBackgroundColor:
+                  isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+              disabledForegroundColor:
+                  isDark ? Colors.white38 : const Color(0xFF94A3B8),
             ),
-            onPressed: snapshot.hasData ? () => _confirmCrop(snapshot.data!) : null,
+            onPressed:
+                snapshot.hasData ? () => _confirmCrop(snapshot.data!) : null,
             icon: const Icon(Icons.check_rounded, size: 16),
             label: const Text(
               'Apply Crop',
@@ -2242,10 +2759,14 @@ class _GalleryCropPainter extends CustomPainter {
 
     final w3 = cropRect.width / 3;
     final h3 = cropRect.height / 3;
-    canvas.drawLine(Offset(cropRect.left + w3, cropRect.top), Offset(cropRect.left + w3, cropRect.bottom), gridPaint);
-    canvas.drawLine(Offset(cropRect.left + w3 * 2, cropRect.top), Offset(cropRect.left + w3 * 2, cropRect.bottom), gridPaint);
-    canvas.drawLine(Offset(cropRect.left, cropRect.top + h3), Offset(cropRect.right, cropRect.top + h3), gridPaint);
-    canvas.drawLine(Offset(cropRect.left, cropRect.top + h3 * 2), Offset(cropRect.right, cropRect.top + h3 * 2), gridPaint);
+    canvas.drawLine(Offset(cropRect.left + w3, cropRect.top),
+        Offset(cropRect.left + w3, cropRect.bottom), gridPaint);
+    canvas.drawLine(Offset(cropRect.left + w3 * 2, cropRect.top),
+        Offset(cropRect.left + w3 * 2, cropRect.bottom), gridPaint);
+    canvas.drawLine(Offset(cropRect.left, cropRect.top + h3),
+        Offset(cropRect.right, cropRect.top + h3), gridPaint);
+    canvas.drawLine(Offset(cropRect.left, cropRect.top + h3 * 2),
+        Offset(cropRect.right, cropRect.top + h3 * 2), gridPaint);
 
     final handlePaint = Paint()
       ..color = accentColor
@@ -2256,7 +2777,12 @@ class _GalleryCropPainter extends CustomPainter {
       ..strokeWidth = 2.0;
 
     const r = 8.0;
-    for (final corner in [cropRect.topLeft, cropRect.topRight, cropRect.bottomLeft, cropRect.bottomRight]) {
+    for (final corner in [
+      cropRect.topLeft,
+      cropRect.topRight,
+      cropRect.bottomLeft,
+      cropRect.bottomRight
+    ]) {
       canvas.drawCircle(corner, r, handlePaint);
       canvas.drawCircle(corner, r, handleStroke);
     }
@@ -2314,7 +2840,6 @@ class _DashedBorderPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _DashedBorderPainter oldDelegate) {
-    return oldDelegate.color != color ||
-        oldDelegate.radius != radius;
+    return oldDelegate.color != color || oldDelegate.radius != radius;
   }
 }

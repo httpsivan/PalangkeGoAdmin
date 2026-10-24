@@ -129,9 +129,8 @@ class _AuditLogPageState extends ConsumerState<AuditLogPage> {
                   }),
                   trailing: [
                     FilterMenuButton(
-                      label: action == null
-                          ? 'All Actions'
-                          : enumLabel(action!),
+                      label:
+                          action == null ? 'All Actions' : enumLabel(action!),
                       values: [
                         'All Actions',
                         ...AuditAction.values.map(enumLabel),
@@ -169,8 +168,7 @@ class _AuditLogPageState extends ConsumerState<AuditLogPage> {
                       .map((item) => DataRow(
                             onSelectChanged: (_) => _showDetails(item),
                             cells: [
-                              DataCell(
-                                  Text(longDate.format(item.timestamp))),
+                              DataCell(Text(longDate.format(item.timestamp))),
                               DataCell(Text(item.administratorName)),
                               DataCell(StatusBadge(
                                   label: enumLabel(item.action),

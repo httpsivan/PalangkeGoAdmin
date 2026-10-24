@@ -46,17 +46,14 @@ class PdfReportService {
     } else {
       var currentIndex = 0;
       // First page
-      final firstBatch =
-          allRows.take(firstPageRowCount).toList();
+      final firstBatch = allRows.take(firstPageRowCount).toList();
       pagesRows.add(firstBatch);
       currentIndex += firstBatch.length;
 
       // Remaining pages
       while (currentIndex < allRows.length) {
-        final batch = allRows
-            .skip(currentIndex)
-            .take(subsequentPageRowCount)
-            .toList();
+        final batch =
+            allRows.skip(currentIndex).take(subsequentPageRowCount).toList();
         pagesRows.add(batch);
         currentIndex += batch.length;
       }
@@ -129,13 +126,15 @@ class PdfReportService {
     final offsets = <int>[];
     for (var index = 0; index < objects.length; index++) {
       offsets.add(output.length);
-      output.add(utf8.encode('${index + 1} 0 obj\n${objects[index]}\nendobj\n'));
+      output
+          .add(utf8.encode('${index + 1} 0 obj\n${objects[index]}\nendobj\n'));
     }
     final xrefOffset = output.length;
     output.add(utf8.encode('xref\n0 ${objects.length + 1}\n'));
     output.add(utf8.encode('0000000000 65535 f \n'));
     for (final offset in offsets) {
-      output.add(utf8.encode('${offset.toString().padLeft(10, '0')} 00000 n \n'));
+      output
+          .add(utf8.encode('${offset.toString().padLeft(10, '0')} 00000 n \n'));
     }
     output.add(utf8.encode(
       'trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n$xrefOffset\n%%EOF',
@@ -172,20 +171,23 @@ class PdfReportService {
     stream.writeln('0.85 0.95 0.90 rg');
     stream.writeln('/F1 8 Tf');
     stream.writeln('${marginX + printableWidth - 280} 546 Td');
-    stream.writeln('(${_pdfText('Export Date: ${_dateFormat.format(doc.header.exportDate)}')}) Tj');
+    stream.writeln(
+        '(${_pdfText('Export Date: ${_dateFormat.format(doc.header.exportDate)}')}) Tj');
     if (doc.header.dateRange != null && doc.header.dateRange!.isNotEmpty) {
       stream.writeln('0 -11 Td');
       stream.writeln('(${_pdfText('Date Range: ${doc.header.dateRange}')}) Tj');
     }
     stream.writeln('0 -11 Td');
     final filterText = 'Export Filter: ${doc.header.activeFilters}';
-    final truncatedFilters =
-        filterText.length > 55 ? '${filterText.substring(0, 52)}...' : filterText;
+    final truncatedFilters = filterText.length > 55
+        ? '${filterText.substring(0, 52)}...'
+        : filterText;
     stream.writeln('(${_pdfText(truncatedFilters)}) Tj');
     stream.writeln('ET');
   }
 
-  static void _renderContinuationHeader(StringBuffer stream, ExportDocument doc) {
+  static void _renderContinuationHeader(
+      StringBuffer stream, ExportDocument doc) {
     // Compact Header Banner: #0B372B
     stream.writeln('0.043 0.216 0.169 rg');
     stream.writeln('$marginX 548.0 $printableWidth 28.0 re f');
@@ -194,7 +196,8 @@ class PdfReportService {
     stream.writeln('1.0 1.0 1.0 rg');
     stream.writeln('/F2 10 Tf');
     stream.writeln('${marginX + 14} 558 Td');
-    stream.writeln('(${_pdfText('${doc.header.organization} - ${doc.header.reportTitle} (Continued)')}) Tj');
+    stream.writeln(
+        '(${_pdfText('${doc.header.organization} - ${doc.header.reportTitle} (Continued)')}) Tj');
     stream.writeln('ET');
   }
 
@@ -288,7 +291,8 @@ class PdfReportService {
       // Bottom cell divider: #E2E8F0
       stream.writeln('0.886 0.910 0.941 RG');
       stream.writeln('0.5 w');
-      stream.writeln('$marginX $currentY m ${marginX + printableWidth} $currentY l S');
+      stream.writeln(
+          '$marginX $currentY m ${marginX + printableWidth} $currentY l S');
 
       // Cell text
       var cellX = marginX;
@@ -308,8 +312,9 @@ class PdfReportService {
 
         stream.writeln('BT');
         // If status row color is present and this is the status column (last or labeled STATUS)
-        final isStatusCol = columns[colIndex].label.toUpperCase().contains('STATUS') ||
-            columns[colIndex].label.toUpperCase().contains('PRIORITY');
+        final isStatusCol =
+            columns[colIndex].label.toUpperCase().contains('STATUS') ||
+                columns[colIndex].label.toUpperCase().contains('PRIORITY');
         if (isStatusCol && row.statusColor != null) {
           final r = (row.statusColor!.r).toStringAsFixed(3);
           final g = (row.statusColor!.g).toStringAsFixed(3);
@@ -341,7 +346,8 @@ class PdfReportService {
     // Divider line: #E2E8F0
     stream.writeln('0.886 0.910 0.941 RG');
     stream.writeln('0.75 w');
-    stream.writeln('$marginX ${footerY + 12} m ${marginX + printableWidth} ${footerY + 12} l S');
+    stream.writeln(
+        '$marginX ${footerY + 12} m ${marginX + printableWidth} ${footerY + 12} l S');
 
     // Left: PalengkeGo Admin [Report Name]
     stream.writeln('BT');

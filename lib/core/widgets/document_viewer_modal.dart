@@ -223,7 +223,8 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
                 Row(
                   children: [
                     Text(
-                      doc.hasBackSide || doc.name.toLowerCase().contains('government id')
+                      doc.hasBackSide ||
+                              doc.name.toLowerCase().contains('government id')
                           ? '${doc.name} (${_idSide == 'front' ? 'Front Side' : 'Back Side'})'
                           : doc.name,
                       style: GoogleFonts.plusJakartaSans(
@@ -249,13 +250,16 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
                         ),
                       ),
                     ),
-                    if (doc.hasBackSide || doc.name.toLowerCase().contains('government id')) ...[
+                    if (doc.hasBackSide ||
+                        doc.name.toLowerCase().contains('government id')) ...[
                       const SizedBox(width: 14),
                       Container(
                         decoration: BoxDecoration(
                           color: colors.subtleBorder.withValues(alpha: 0.3),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: colors.subtleBorder.withValues(alpha: 0.6)),
+                          border: Border.all(
+                              color:
+                                  colors.subtleBorder.withValues(alpha: 0.6)),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -264,9 +268,12 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
                               onTap: () => setState(() => _idSide = 'front'),
                               borderRadius: BorderRadius.circular(20),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: _idSide == 'front' ? colors.accent : Colors.transparent,
+                                  color: _idSide == 'front'
+                                      ? colors.accent
+                                      : Colors.transparent,
                                   borderRadius: BorderRadius.circular(20),
                                 ),
                                 child: Row(
@@ -275,7 +282,9 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
                                     Icon(
                                       Icons.badge_rounded,
                                       size: 13,
-                                      color: _idSide == 'front' ? Colors.white : colors.secondaryText,
+                                      color: _idSide == 'front'
+                                          ? Colors.white
+                                          : colors.secondaryText,
                                     ),
                                     const SizedBox(width: 4),
                                     Text(
@@ -283,7 +292,9 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
                                       style: TextStyle(
                                         fontSize: 11,
                                         fontWeight: FontWeight.bold,
-                                        color: _idSide == 'front' ? Colors.white : colors.secondaryText,
+                                        color: _idSide == 'front'
+                                            ? Colors.white
+                                            : colors.secondaryText,
                                       ),
                                     ),
                                   ],
@@ -294,9 +305,12 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
                               onTap: () => setState(() => _idSide = 'back'),
                               borderRadius: BorderRadius.circular(20),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: _idSide == 'back' ? colors.accent : Colors.transparent,
+                                  color: _idSide == 'back'
+                                      ? colors.accent
+                                      : Colors.transparent,
                                   borderRadius: BorderRadius.circular(20),
                                 ),
                                 child: Row(
@@ -305,7 +319,9 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
                                     Icon(
                                       Icons.flip_to_back_rounded,
                                       size: 13,
-                                      color: _idSide == 'back' ? Colors.white : colors.secondaryText,
+                                      color: _idSide == 'back'
+                                          ? Colors.white
+                                          : colors.secondaryText,
                                     ),
                                     const SizedBox(width: 4),
                                     Text(
@@ -313,7 +329,9 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
                                       style: TextStyle(
                                         fontSize: 11,
                                         fontWeight: FontWeight.bold,
-                                        color: _idSide == 'back' ? Colors.white : colors.secondaryText,
+                                        color: _idSide == 'back'
+                                            ? Colors.white
+                                            : colors.secondaryText,
                                       ),
                                     ),
                                   ],
@@ -402,10 +420,12 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
   }
 
   Widget _buildImageViewer(BuildContext context, KycDocument doc) {
-    final isGovId = doc.hasBackSide || doc.name.toLowerCase().contains('government id');
+    final isGovId =
+        doc.hasBackSide || doc.name.toLowerCase().contains('government id');
 
     if (isGovId && _idSide == 'back') {
-      final hasBack = doc.isBackSubmitted && (doc.idBackAssetPath != null || doc.idBackUrl != null);
+      final hasBack = doc.isBackSubmitted &&
+          (doc.idBackAssetPath != null || doc.idBackUrl != null);
       if (!hasBack) {
         return _buildMissingBackSidePlaceholder(context, doc);
       }
@@ -424,7 +444,26 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
           child: Image.asset(
             targetAsset,
             fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => _buildGovernmentIdCardImage(doc, isFront: _idSide == 'front'),
+            errorBuilder: (_, __, ___) =>
+                _buildGovernmentIdCardImage(doc, isFront: _idSide == 'front'),
+          ),
+        ),
+      );
+    }
+
+    final targetUrl = (isGovId && _idSide == 'back')
+        ? (doc.idBackUrl ?? doc.fileUrl)
+        : (doc.idFrontUrl ?? doc.fileUrl);
+    if (targetUrl != null && targetUrl.isNotEmpty) {
+      return InteractiveViewer(
+        transformationController: _transformationController,
+        minScale: 0.8,
+        maxScale: 4.0,
+        child: Center(
+          child: Image.network(
+            targetUrl,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => _buildImageLoadError(context),
           ),
         ),
       );
@@ -440,7 +479,20 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
     );
   }
 
-  Widget _buildMissingBackSidePlaceholder(BuildContext context, KycDocument doc) {
+  Widget _buildImageLoadError(BuildContext context) => Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.broken_image_outlined, size: 48),
+            const SizedBox(height: 8),
+            Text('Could not load document image',
+                style: Theme.of(context).textTheme.bodyMedium),
+          ],
+        ),
+      );
+
+  Widget _buildMissingBackSidePlaceholder(
+      BuildContext context, KycDocument doc) {
     final colors = semanticColors(context);
     return Center(
       child: Container(
@@ -502,11 +554,15 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: const [
-                  Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFFD97706)),
+                  Icon(Icons.info_outline_rounded,
+                      size: 16, color: Color(0xFFD97706)),
                   SizedBox(width: 8),
                   Text(
                     'Use "Request Additional Documents" below to notify vendor.',
-                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Colors.black87),
+                    style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87),
                   ),
                 ],
               ),
@@ -543,7 +599,8 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
                   children: [
                     Row(
                       children: const [
-                        Icon(Icons.badge_rounded, color: Color(0xFF38BDF8), size: 28),
+                        Icon(Icons.badge_rounded,
+                            color: Color(0xFF38BDF8), size: 28),
                         SizedBox(width: 10),
                         Text(
                           'REPUBLIC OF THE PHILIPPINES',
@@ -557,14 +614,18 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
                       ],
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: const Color(0xFF0EA5E9).withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: const Text(
                         'PHILSYS ID • FRONT',
-                        style: TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            color: Color(0xFF38BDF8),
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold),
                       ),
                     ),
                   ],
@@ -581,7 +642,8 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
                         border: Border.all(color: Colors.white24),
                       ),
                       child: const Center(
-                        child: Icon(Icons.person_rounded, size: 64, color: Colors.white70),
+                        child: Icon(Icons.person_rounded,
+                            size: 64, color: Colors.white70),
                       ),
                     ),
                     const SizedBox(width: 20),
@@ -607,9 +669,13 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
                             ),
                           ),
                           const SizedBox(height: 12),
-                          const Text('NATIONAL IDENTITY CARD (FRONT CAPTURE)', style: TextStyle(color: Colors.white70, fontSize: 10)),
+                          const Text('NATIONAL IDENTITY CARD (FRONT CAPTURE)',
+                              style: TextStyle(
+                                  color: Colors.white70, fontSize: 10)),
                           const SizedBox(height: 2),
-                          const Text('ISSUED: JAN 05, 2022  •  EXPIRY: NEVER', style: TextStyle(color: Colors.white54, fontSize: 9.5)),
+                          const Text('ISSUED: JAN 05, 2022  •  EXPIRY: NEVER',
+                              style: TextStyle(
+                                  color: Colors.white54, fontSize: 9.5)),
                         ],
                       ),
                     ),
@@ -619,8 +685,13 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: const [
-                    Text('OFFICIAL IDENTIFICATION FRONT CAPTURE', style: TextStyle(color: Colors.white38, fontSize: 9, fontWeight: FontWeight.bold)),
-                    Icon(Icons.verified_user_rounded, color: Color(0xFF22C55E), size: 20),
+                    Text('OFFICIAL IDENTIFICATION FRONT CAPTURE',
+                        style: TextStyle(
+                            color: Colors.white38,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold)),
+                    Icon(Icons.verified_user_rounded,
+                        color: Color(0xFF22C55E), size: 20),
                   ],
                 ),
               ],
@@ -633,7 +704,8 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
                   children: [
                     Row(
                       children: const [
-                        Icon(Icons.flip_to_back_rounded, color: Color(0xFF38BDF8), size: 24),
+                        Icon(Icons.flip_to_back_rounded,
+                            color: Color(0xFF38BDF8), size: 24),
                         SizedBox(width: 10),
                         Text(
                           'PHILIPPINE IDENTIFICATION SYSTEM',
@@ -647,14 +719,18 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
                       ],
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: const Color(0xFF0EA5E9).withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: const Text(
                         'PHILSYS ID • BACK',
-                        style: TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            color: Color(0xFF38BDF8),
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold),
                       ),
                     ),
                   ],
@@ -662,9 +738,18 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
                 const SizedBox(height: 16),
                 Container(height: 1, color: Colors.white24),
                 const SizedBox(height: 16),
-                const Text('PERMANENT RESIDENCE ADDRESS:', style: TextStyle(color: Colors.white54, fontSize: 9.5, fontWeight: FontWeight.bold)),
+                const Text('PERMANENT RESIDENCE ADDRESS:',
+                    style: TextStyle(
+                        color: Colors.white54,
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.bold)),
                 const SizedBox(height: 4),
-                const Text('Penafrancia Avenue, Barangay Dayangdang, Naga City, Camarines Sur, 4400', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                const Text(
+                    'Penafrancia Avenue, Barangay Dayangdang, Naga City, Camarines Sur, 4400',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600)),
                 const SizedBox(height: 16),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -672,9 +757,17 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: const [
-                        Text('EMERGENCY CONTACT:', style: TextStyle(color: Colors.white54, fontSize: 9.5, fontWeight: FontWeight.bold)),
+                        Text('EMERGENCY CONTACT:',
+                            style: TextStyle(
+                                color: Colors.white54,
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.bold)),
                         SizedBox(height: 2),
-                        Text('+63 917 555 0192', style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w600)),
+                        Text('+63 917 555 0192',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600)),
                       ],
                     ),
                     Container(
@@ -682,7 +775,8 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
                       height: 40,
                       color: Colors.white12,
                       child: const Center(
-                        child: Icon(Icons.qr_code_2_rounded, color: Colors.white70, size: 32),
+                        child: Icon(Icons.qr_code_2_rounded,
+                            color: Colors.white70, size: 32),
                       ),
                     ),
                   ],
@@ -691,8 +785,13 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: const [
-                    Text('OFFICIAL IDENTIFICATION BACK CAPTURE', style: TextStyle(color: Colors.white38, fontSize: 9, fontWeight: FontWeight.bold)),
-                    Icon(Icons.shield_outlined, color: Color(0xFF38BDF8), size: 18),
+                    Text('OFFICIAL IDENTIFICATION BACK CAPTURE',
+                        style: TextStyle(
+                            color: Colors.white38,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold)),
+                    Icon(Icons.shield_outlined,
+                        color: Color(0xFF38BDF8), size: 18),
                   ],
                 ),
               ],
@@ -708,7 +807,8 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
     final isMarketClearance = doc.name.toLowerCase().contains('market') ||
         doc.filename.toLowerCase().contains('clearance');
 
-    final totalPages = (isMayorsPermit || isSanitary || isMarketClearance) ? 1 : 2;
+    final totalPages =
+        (isMayorsPermit || isSanitary || isMarketClearance) ? 1 : 2;
 
     return Column(
       children: [
@@ -731,8 +831,7 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
               ),
               const SizedBox(width: 8),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: const Color(0xFFEF4444).withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(4),
@@ -977,11 +1076,14 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
           ),
           child: Column(
             children: [
-              _permitDetailRow('BUSINESS STALL NAME', widget.stallName.toUpperCase()),
+              _permitDetailRow(
+                  'BUSINESS STALL NAME', widget.stallName.toUpperCase()),
               const Divider(height: 16),
-              _permitDetailRow('PERMITTEE / OWNER', widget.applicantName.toUpperCase()),
+              _permitDetailRow(
+                  'PERMITTEE / OWNER', widget.applicantName.toUpperCase()),
               const Divider(height: 16),
-              _permitDetailRow('STALL LOCATION', 'NAGA CITY PEOPLE\'S MALL, ${widget.stallName} Area'),
+              _permitDetailRow('STALL LOCATION',
+                  'NAGA CITY PEOPLE\'S MALL, ${widget.stallName} Area'),
               const Divider(height: 16),
               _permitDetailRow('DATE ISSUED', 'JANUARY 12, 2026'),
               const Divider(height: 16),
@@ -1024,13 +1126,17 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
                   height: 40,
                   color: Colors.grey.shade200,
                   child: const Center(
-                    child: Icon(Icons.qr_code_2_rounded, size: 36, color: Colors.black87),
+                    child: Icon(Icons.qr_code_2_rounded,
+                        size: 36, color: Colors.black87),
                   ),
                 ),
                 const SizedBox(height: 4),
                 const Text(
                   'VERIFICATION QR / BARCODE',
-                  style: TextStyle(fontSize: 9, color: Colors.black54, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                      fontSize: 9,
+                      color: Colors.black54,
+                      fontWeight: FontWeight.bold),
                 ),
               ],
             ),
@@ -1053,7 +1159,10 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
                 const SizedBox(height: 2),
                 const Text(
                   'APPROVED BY AUTHORITY OF THE MAYOR',
-                  style: TextStyle(fontSize: 8.5, color: Colors.black45, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                      fontSize: 8.5,
+                      color: Colors.black45,
+                      fontWeight: FontWeight.bold),
                 ),
               ],
             ),
@@ -1069,11 +1178,15 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
       children: [
         const Text(
           'REPUBLIC OF THE PHILIPPINES',
-          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+          style: TextStyle(
+              fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2),
         ),
         const Text(
           'CITY HEALTH OFFICE — NAGA CITY',
-          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFF065F46)),
+          style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF065F46)),
         ),
         const Text(
           'Sanitation & Food Safety Inspection Division',
@@ -1088,13 +1201,17 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
           ),
           child: const Text(
             'SANITARY PERMIT TO OPERATE',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+            style: TextStyle(
+                fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
           ),
         ),
         const SizedBox(height: 24),
         Text(
           'Permit No: CHO-SP-2026-${(widget.applicantName.hashCode.abs() % 8999 + 1000)}',
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF065F46)),
+          style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF065F46)),
         ),
         const SizedBox(height: 20),
         Text(
@@ -1114,7 +1231,10 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
             children: const [
               Text(
                 'SANITATION RATING: CLASS A (EXCELLENT)',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Color(0xFF047857)),
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF047857)),
               ),
               SizedBox(height: 6),
               Text(
@@ -1129,11 +1249,15 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('Date Issued: Jan 10, 2026', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+            const Text('Date Issued: Jan 10, 2026',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
             Column(
               children: const [
-                Text('DR. VITO C. BORROMEO', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                Text('City Health Officer', style: TextStyle(fontSize: 10, color: Colors.black54)),
+                Text('DR. VITO C. BORROMEO',
+                    style:
+                        TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                Text('City Health Officer',
+                    style: TextStyle(fontSize: 10, color: Colors.black54)),
               ],
             ),
           ],
@@ -1146,18 +1270,26 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        const Text('CITY GOVERNMENT OF NAGA', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+        const Text('CITY GOVERNMENT OF NAGA',
+            style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
         const Text(
           'OFFICE OF THE MARKET MASTER',
-          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFF1E293B)),
+          style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF1E293B)),
         ),
-        const Text('Naga City People\'s Mall Administration', style: TextStyle(fontSize: 10, color: Colors.black54)),
+        const Text('Naga City People\'s Mall Administration',
+            style: TextStyle(fontSize: 10, color: Colors.black54)),
         const SizedBox(height: 20),
         Container(height: 2, color: const Color(0xFF1E293B)),
         const SizedBox(height: 20),
         const Text(
           'STALL HOLDER MARKET CLEARANCE',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF1E293B)),
+          style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF1E293B)),
         ),
         const SizedBox(height: 16),
         Text(
@@ -1188,8 +1320,10 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
           alignment: Alignment.centerRight,
           child: Column(
             children: const [
-              Text('RAMON J. FLORENDO', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-              Text('Market Enterprise & Promotions Officer', style: TextStyle(fontSize: 10, color: Colors.black54)),
+              Text('RAMON J. FLORENDO',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              Text('Market Enterprise & Promotions Officer',
+                  style: TextStyle(fontSize: 10, color: Colors.black54)),
             ],
           ),
         ),
@@ -1201,8 +1335,16 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Colors.black54)),
-        Text(value, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: Colors.black87)),
+        Text(label,
+            style: const TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.bold,
+                color: Colors.black54)),
+        Text(value,
+            style: const TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w800,
+                color: Colors.black87)),
       ],
     );
   }
@@ -1210,9 +1352,14 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
   static Widget _checkBadge(String text) {
     return Row(
       children: [
-        const Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 14),
+        const Icon(Icons.check_circle_rounded,
+            color: Color(0xFF16A34A), size: 14),
         const SizedBox(width: 4),
-        Text(text, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF15803D))),
+        Text(text,
+            style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF15803D))),
       ],
     );
   }
@@ -1301,8 +1448,8 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
         const SizedBox(height: 30),
         const Text(
             'Noted by:\n\nHARVEY P. PLAZO\nCapstone Adviser, STI College Naga\n\nJOHN DARRELL D. ANADON, MBA\nBSIT Program Head, STI College Naga',
-            style: TextStyle(
-                color: Colors.black87, fontSize: 12.5, height: 1.4)),
+            style:
+                TextStyle(color: Colors.black87, fontSize: 12.5, height: 1.4)),
       ],
     );
   }
@@ -1316,7 +1463,8 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
           color: const Color(0xFF1E40AF),
           child: Row(
             children: [
-              const Icon(Icons.description_rounded, color: Colors.white, size: 20),
+              const Icon(Icons.description_rounded,
+                  color: Colors.white, size: 20),
               const SizedBox(width: 10),
               Text(
                 doc.filename,
@@ -1345,9 +1493,13 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
               const Spacer(),
               const Text(
                 'Page 1 of 1',
-                style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold),
               ),
-              const VerticalDivider(color: Colors.white24, indent: 6, endIndent: 6),
+              const VerticalDivider(
+                  color: Colors.white24, indent: 6, endIndent: 6),
               Row(
                 children: [
                   IconButton(
@@ -1485,9 +1637,7 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
         const Text(
           '(FSIC FOR BUSINESS PERMIT)',
           style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-              color: Colors.black54),
+              fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black54),
         ),
         const SizedBox(height: 16),
         Row(
@@ -1531,13 +1681,16 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
           ),
           child: Column(
             children: [
-              _permitDetailRow('ESTABLISHMENT / STALL', widget.stallName.toUpperCase()),
+              _permitDetailRow(
+                  'ESTABLISHMENT / STALL', widget.stallName.toUpperCase()),
               const Divider(height: 14),
-              _permitDetailRow('OWNER / REPRESENTATIVE', widget.applicantName.toUpperCase()),
+              _permitDetailRow(
+                  'OWNER / REPRESENTATIVE', widget.applicantName.toUpperCase()),
               const Divider(height: 14),
               _permitDetailRow('LOCATION', 'NAGA CITY PEOPLE\'S MALL'),
               const Divider(height: 14),
-              _permitDetailRow('SAFETY EQUIPMENT', '2x 10lbs ABC DRY CHEMICAL EXTINGUISHERS'),
+              _permitDetailRow('SAFETY EQUIPMENT',
+                  '2x 10lbs ABC DRY CHEMICAL EXTINGUISHERS'),
               const Divider(height: 14),
               _permitDetailRow('VALID UNTIL', 'DECEMBER 31, 2026'),
             ],
@@ -1559,7 +1712,8 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: const Color(0xFFDC2626),
                     borderRadius: BorderRadius.circular(4),

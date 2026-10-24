@@ -26,7 +26,8 @@ class AdminSettingsDialog extends ConsumerStatefulWidget {
   const AdminSettingsDialog({super.key});
 
   @override
-  ConsumerState<AdminSettingsDialog> createState() => _AdminSettingsDialogState();
+  ConsumerState<AdminSettingsDialog> createState() =>
+      _AdminSettingsDialogState();
 }
 
 class _AdminSettingsDialogState extends ConsumerState<AdminSettingsDialog> {
@@ -121,12 +122,22 @@ class _AdminSettingsDialogState extends ConsumerState<AdminSettingsDialog> {
       _saving = true;
       _error = null;
     });
-    await ref.read(adminProfileProvider.notifier).updateProfile(
-          name: name,
-          password: password.isEmpty ? null : password,
-          avatarBytes: _selectedAvatarBytes,
-          removeAvatar: _removeAvatar,
-        );
+    try {
+      await ref.read(adminProfileProvider.notifier).updateProfile(
+            name: name,
+            password: password.isEmpty ? null : password,
+            avatarBytes: _selectedAvatarBytes,
+            removeAvatar: _removeAvatar,
+          );
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _error = 'Could not save profile: $error';
+        });
+      }
+      return;
+    }
     if (!mounted) return;
     Navigator.of(context).maybePop();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -280,7 +291,8 @@ class _AdminSettingsDialogState extends ConsumerState<AdminSettingsDialog> {
                           color: colors.dangerContainer,
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: const Color(0xFFEF4444).withValues(alpha: 0.3),
+                            color:
+                                const Color(0xFFEF4444).withValues(alpha: 0.3),
                           ),
                         ),
                         child: Row(
@@ -432,7 +444,8 @@ class _AdminSettingsDialogState extends ConsumerState<AdminSettingsDialog> {
               icon: const Icon(Icons.upload_outlined, size: 16),
               label: Text(avatarBytes == null ? 'Add photo' : 'Change photo'),
               style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               ),
             ),
             if (avatarBytes != null)
