@@ -1,15 +1,37 @@
+/// Represents a single chat message sent within a conversation thread.
 class ChatMessage {
+  /// Unique message identifier.
   final String id;
+
+  /// Identifier of the parent conversation.
   final String conversationId;
+
+  /// Identifier of the sender (admin UID or vendor/customer ID).
   final String senderId;
+
+  /// Display name of the sender.
   final String senderName;
-  final String senderRole; // 'customer' | 'vendor' | 'admin'
+
+  /// Role of the sender ('customer', 'vendor', or 'admin').
+  final String senderRole;
+
+  /// Body text content of the message.
   final String text;
+
+  /// Timestamp when the message was sent.
   final DateTime timestamp;
+
+  /// Whether the message has been marked as read.
   final bool isRead;
+
+  /// Timestamp when the message was read, if applicable.
   final DateTime? readAt;
+
+  /// URL of any optional media attachment.
   final String? attachmentUrl;
-  final String? attachmentType; // 'image', etc.
+
+  /// MIME or category type of attachment (e.g., 'image').
+  final String? attachmentType;
 
   const ChatMessage({
     required this.id,
@@ -25,11 +47,19 @@ class ChatMessage {
     this.attachmentType,
   });
 
+  /// True if sent by a Market Admin.
   bool get isFromAdmin => senderRole == 'admin';
+
+  /// True if sent by a vendor or stall holder.
   bool get isFromVendor => senderRole == 'vendor';
+
+  /// True if sent by a customer.
   bool get isFromCustomer => senderRole == 'customer';
+
+  /// True if the message includes a media attachment.
   bool get hasAttachment => attachmentUrl != null && attachmentUrl!.isNotEmpty;
 
+  /// Creates a copy of this message with specified fields replaced.
   ChatMessage copyWith({
     String? id,
     String? conversationId,

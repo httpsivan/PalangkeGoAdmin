@@ -10,6 +10,7 @@ import '../../models/chat_conversation.dart';
 import '../../models/chat_message.dart';
 import 'supabase_admin_service.dart';
 
+/// Riverpod provider delivering the singleton instance of [AdminMessagingRepository].
 final adminMessagingRepositoryProvider = Provider<AdminMessagingRepository>((ref) {
   final prefs = ref.watch(sharedPreferencesProvider);
   final supabaseAdmin = ref.watch(supabaseAdminServiceProvider);
@@ -24,6 +25,7 @@ final adminMessagingRepositoryProvider = Provider<AdminMessagingRepository>((ref
   return repo;
 });
 
+/// Real-time stream provider of all conversations for the admin messaging dashboard.
 final adminConversationsProvider =
     StreamProvider.autoDispose<List<ChatConversation>>((ref) async* {
   final repo = ref.watch(adminMessagingRepositoryProvider);
@@ -32,6 +34,7 @@ final adminConversationsProvider =
   yield* repo.watchConversations();
 });
 
+/// Provider computing the total number of conversations with unread messages for admin.
 final adminUnreadMessagesCountProvider = Provider<int>((ref) {
   final conversationsAsync = ref.watch(adminConversationsProvider);
   return conversationsAsync.maybeWhen(
@@ -42,6 +45,7 @@ final adminUnreadMessagesCountProvider = Provider<int>((ref) {
   );
 });
 
+/// Stream provider for live messages belonging to a specific [conversationId].
 final adminConversationMessagesProvider =
     StreamProvider.autoDispose.family<List<ChatMessage>, String>((
   ref,
@@ -53,6 +57,10 @@ final adminConversationMessagesProvider =
   yield* repo.watchMessages(conversationId);
 });
 
+/// Repository orchestrating market admin messaging with stall holders.
+///
+/// Supports real-time updates via Supabase and falls back transparently
+/// to a persistent local SharedPreferences store when offline or in mock mode.
 class AdminMessagingRepository {
   AdminMessagingRepository({
     SupabaseClient? client,
@@ -87,6 +95,7 @@ class AdminMessagingRepository {
 
   // ── Public Stream & Query Methods ──────────────────────────────────────────
 
+  /// Returns a real-time stream of all conversations ordered by latest message.
   Stream<List<ChatConversation>> watchConversations() {
     final client = _client;
     if (client != null) {
@@ -103,6 +112,7 @@ class AdminMessagingRepository {
     return _conversationsStreamController.stream;
   }
 
+  /// Fetches a one-time snapshot of conversations from Supabase or local storage.
   Future<List<ChatConversation>> getConversations() async {
     final client = _client;
     if (client != null) {
@@ -123,6 +133,7 @@ class AdminMessagingRepository {
     return List.unmodifiable(_localConversations);
   }
 
+  /// Returns a real-time stream of messages in a given [conversationId].
   Stream<List<ChatMessage>> watchMessages(String conversationId) {
     final client = _client;
     if (client != null) {
@@ -145,6 +156,7 @@ class AdminMessagingRepository {
     return _messageStreamControllers[conversationId]!.stream;
   }
 
+  /// Fetches existing messages for a given [conversationId].
   Future<List<ChatMessage>> getMessages(String conversationId) async {
     final client = _client;
     if (client != null) {
@@ -166,6 +178,7 @@ class AdminMessagingRepository {
     return List.unmodifiable(_localMessages[conversationId] ?? []);
   }
 
+  /// Dispatches a message from Admin to a vendor conversation thread.
   Future<ChatMessage> sendMessage({
     required String conversationId,
     required String text,
@@ -240,6 +253,7 @@ class AdminMessagingRepository {
     return message;
   }
 
+  /// Marks all unread messages in [conversationId] as read by Admin and clears unread counters.
   Future<void> markAsRead(String conversationId) async {
     final client = _client;
     if (client != null) {

@@ -10,8 +10,11 @@ import '../../data/repositories/admin_messaging_repository.dart';
 import '../../models/chat_conversation.dart';
 import '../../models/chat_message.dart';
 
+/// Filter options for conversations in the messaging overlay panel.
 enum MessageFilter { all, unread }
 
+/// Slide-over drawer panel providing fast access to vendor messaging from anywhere
+/// in the PalengkeGo Admin interface.
 class MessagesPanel extends ConsumerStatefulWidget {
   const MessagesPanel({
     super.key,
@@ -19,7 +22,10 @@ class MessagesPanel extends ConsumerStatefulWidget {
     this.initialConversationId,
   });
 
+  /// Callback executed when the panel close button or overlay backdrop is pressed.
   final VoidCallback onClose;
+
+  /// Optional initial conversation to display directly when the panel opens.
   final String? initialConversationId;
 
   @override

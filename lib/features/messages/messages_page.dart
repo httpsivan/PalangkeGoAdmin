@@ -8,12 +8,15 @@ import '../../data/repositories/admin_messaging_repository.dart';
 import '../../models/chat_conversation.dart';
 import '../../models/chat_message.dart';
 
+/// Full-page messaging dashboard allowing Market Admin to manage vendor conversations,
+/// view real-time chat histories, search stall holders, and send responses.
 class MessagesPage extends ConsumerStatefulWidget {
   const MessagesPage({
     super.key,
     this.initialConversationId,
   });
 
+  /// Optional initial conversation identifier to select immediately upon opening.
   final String? initialConversationId;
 
   @override

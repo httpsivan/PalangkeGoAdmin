@@ -1,20 +1,54 @@
+/// Represents a messaging thread between Market Admin and a stall holder / vendor.
 class ChatConversation {
+  /// Unique conversation identifier.
   final String id;
+
+  /// Identifier of the stall holder or vendor.
   final String stallId;
+
+  /// Display name of the stall (e.g., "Omar Rivera (Sari-sari)").
   final String stallName;
+
+  /// Optional avatar image URL for the stall.
   final String? stallAvatar;
+
+  /// UID of the customer or admin participant.
   final String customerUid;
+
+  /// Display name of the customer or admin.
   final String customerName;
+
+  /// Optional avatar image URL for customer/admin.
   final String? customerAvatar;
+
+  /// Text content of the most recent message in the thread.
   final String lastMessageText;
+
+  /// Timestamp when the most recent message was sent.
   final DateTime lastMessageTimestamp;
+
+  /// Sender identifier of the most recent message.
   final String lastMessageSenderId;
+
+  /// Unread message count for the customer view.
   final int customerUnreadCount;
+
+  /// Unread message count for the vendor view.
   final int vendorUnreadCount;
+
+  /// Unread message count requiring Market Admin review.
   final int adminUnreadCount;
-  final String inquiryType; // 'product' | 'order' | 'delivery' | 'general'
+
+  /// Category or inquiry type ('product', 'order', 'delivery', 'general').
+  final String inquiryType;
+
+  /// Optional related order identifier if inquiring about a specific order.
   final String? relatedOrderId;
+
+  /// Timestamp when the conversation was initialized.
   final DateTime createdAt;
+
+  /// Timestamp when the conversation was last updated.
   final DateTime updatedAt;
 
   const ChatConversation({
@@ -37,9 +71,12 @@ class ChatConversation {
     required this.updatedAt,
   });
 
+  /// True if there are unread messages requiring admin attention.
   bool get hasUnreadForAdmin =>
       adminUnreadCount > 0 || customerUnreadCount > 0 || vendorUnreadCount > 0;
 
+  /// Returns the formatted stall name with category tag formatted in Title Case.
+  /// E.g., "Mer's Mayao Fruit Stand" -> "Mer's Mayao (Fruit)".
   String get displayStallName {
     var name = stallName;
     if (!name.contains('(') && name.toLowerCase().contains('fruit')) {
@@ -52,6 +89,7 @@ class ChatConversation {
     });
   }
 
+  /// Creates a copy of this conversation with specified fields replaced.
   ChatConversation copyWith({
     String? id,
     String? stallId,
@@ -92,6 +130,7 @@ class ChatConversation {
     );
   }
 
+  /// Serializes this conversation to a JSON map.
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -114,6 +153,7 @@ class ChatConversation {
     };
   }
 
+  /// Deserializes a conversation from a database row or JSON map.
   factory ChatConversation.fromJson(Map<String, dynamic> json) {
     return ChatConversation(
       id: (json['id'] ?? json['conversation_id'] ?? '').toString(),
