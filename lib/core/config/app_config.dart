@@ -26,7 +26,6 @@ class AppConfig {
       'FIREBASE_ENABLED',
       defaultValue: false,
     );
-    final hasBackend = firebaseEnabled || rawUrl.isNotEmpty;
 
     final supabaseUrl = rawUrl.isNotEmpty
         ? rawUrl
