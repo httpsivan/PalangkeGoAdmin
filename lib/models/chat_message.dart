@@ -1,5 +1,30 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 /// Represents a single chat message sent within a conversation thread.
 class ChatMessage {
+  static final Map<String, Uint8List> _base64ImageCache = {};
+
+  /// Decodes and caches a `data:image/...;base64,...` URI so [MemoryImage]
+  /// preserves [Uint8List] reference identity across widget rebuilds and
+  /// prevents image blinking/flickering.
+  static Uint8List? decodeBase64Image(String url) {
+    final cached = _base64ImageCache[url];
+    if (cached != null) return cached;
+    try {
+      final commaIdx = url.indexOf(',');
+      if (commaIdx == -1) return null;
+      final b64 = url.substring(commaIdx + 1).replaceAll(RegExp(r'\s+'), '');
+      final bytes = base64Decode(b64);
+      if (_base64ImageCache.length >= 60) {
+        _base64ImageCache.remove(_base64ImageCache.keys.first);
+      }
+      _base64ImageCache[url] = bytes;
+      return bytes;
+    } catch (_) {
+      return null;
+    }
+  }
   /// Unique message identifier.
   final String id;
 

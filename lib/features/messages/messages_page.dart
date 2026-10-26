@@ -596,9 +596,11 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
                   final isRight = msg.isFromAdmin;
 
                   return Column(
+                    key: ValueKey('msg_col_${msg.id}'),
                     children: [
                       if (isNewDay) _DateDivider(date: msg.timestamp.toLocal()),
                       _FullChatBubble(
+                        key: ValueKey('bubble_${msg.id}'),
                         message: msg,
                         isRight: isRight,
                       ),
@@ -641,6 +643,7 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
                             width: 56,
                             height: 56,
                             fit: BoxFit.cover,
+                            gaplessPlayback: true,
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -835,6 +838,7 @@ class _DateDivider extends StatelessWidget {
 
 class _FullChatBubble extends StatelessWidget {
   const _FullChatBubble({
+    super.key,
     required this.message,
     required this.isRight,
   });
@@ -842,25 +846,25 @@ class _FullChatBubble extends StatelessWidget {
   final ChatMessage message;
   final bool isRight;
 
+  /// Builds an attachment image using cached base64 bytes and gapless playback
+  /// to prevent flickering when conversation streams rebuild.
   Widget _buildImageWidget(String url, {BoxFit fit = BoxFit.cover}) {
     if (url.startsWith('data:image')) {
-      try {
-        final commaIdx = url.indexOf(',');
-        if (commaIdx != -1) {
-          final bytes = base64Decode(url.substring(commaIdx + 1));
-          return Image.memory(
-            bytes,
-            fit: fit,
-            errorBuilder: (_, __, ___) => _brokenImagePlaceholder(),
-          );
-        }
-      } catch (_) {
-        return _brokenImagePlaceholder();
+      final bytes = ChatMessage.decodeBase64Image(url);
+      if (bytes != null) {
+        return Image.memory(
+          bytes,
+          fit: fit,
+          gaplessPlayback: true,
+          errorBuilder: (_, __, ___) => _brokenImagePlaceholder(),
+        );
       }
+      return _brokenImagePlaceholder();
     }
     return Image.network(
       url,
       fit: fit,
+      gaplessPlayback: true,
       errorBuilder: (_, __, ___) => _brokenImagePlaceholder(),
     );
   }

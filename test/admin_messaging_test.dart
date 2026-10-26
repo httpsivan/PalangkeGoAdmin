@@ -93,6 +93,17 @@ void main() {
       final fruitConv = conv.copyWith(stallName: "Mer's Mayao Fruit Stand");
       expect(fruitConv.displayStallName, "Mer's Mayao (Fruit)");
     });
+
+    test('ChatMessage.decodeBase64Image caches Uint8List reference to prevent image blinking on rebuilds', () {
+      const dataUri =
+          'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+      final first = ChatMessage.decodeBase64Image(dataUri);
+      final second = ChatMessage.decodeBase64Image(dataUri);
+
+      expect(first, isNotNull);
+      expect(identical(first, second), isTrue);
+      expect(MemoryImage(first!), equals(MemoryImage(second!)));
+    });
   });
 
   group('AdminMessagingRepository', () {
