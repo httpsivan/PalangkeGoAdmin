@@ -30,13 +30,11 @@ class AppConfig {
 
     final supabaseUrl = rawUrl.isNotEmpty
         ? rawUrl
-        : (hasBackend ? 'https://jvpplxlcucuzmbtbmtah.supabase.co' : '');
+        : 'https://jvpplxlcucuzmbtbmtah.supabase.co';
 
     final supabaseAnonKey = rawAnonKey.isNotEmpty
         ? rawAnonKey
-        : (hasBackend
-            ? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp2cHBseGxjdWN1em1idGJtdGFoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxMjIyNTUsImV4cCI6MjEwMjY5ODI1NX0.FrYvHhZjARj-XZNC1ZgxfVa1ixJQsuMTkRRMTxCamw0'
-            : '');
+        : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp2cHBseGxjdWN1em1idGJtdGFoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxMjIyNTUsImV4cCI6MjEwMjY5ODI1NX0.FrYvHhZjARj-XZNC1ZgxfVa1ixJQsuMTkRRMTxCamw0';
 
     return AppConfig(
       firebaseEnabled: firebaseEnabled,

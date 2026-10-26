@@ -95,6 +95,13 @@ class AdminMessagingRepository {
 
   // ── Public Stream & Query Methods ──────────────────────────────────────────
 
+  bool _isAdminConversation(ChatConversation c) {
+    return c.inquiryType == 'admin_support' ||
+        c.customerUid == 'admin_support' ||
+        c.customerUid == 'admin-market-master' ||
+        c.stallId == 'admin_support';
+  }
+
   /// Returns a real-time stream of all conversations ordered by latest message.
   Stream<List<ChatConversation>> watchConversations() {
     final client = _client;
@@ -104,7 +111,13 @@ class AdminMessagingRepository {
             .from('conversations')
             .stream(primaryKey: ['id'])
             .order('last_message_timestamp', ascending: false)
-            .map((rows) => rows.map((r) => ChatConversation.fromJson(r)).toList());
+            .map((rows) {
+              final list = rows
+                  .map((r) => ChatConversation.fromJson(r))
+                  .where(_isAdminConversation)
+                  .toList();
+              return list.isNotEmpty ? list : List.unmodifiable(_localConversations);
+            });
       } catch (e) {
         debugPrint('[AdminMessaging] Supabase stream error, falling back to local: $e');
       }
@@ -121,9 +134,11 @@ class AdminMessagingRepository {
             .from('conversations')
             .select()
             .order('last_message_timestamp', ascending: false);
-        return (response as List<dynamic>)
+        final list = (response as List<dynamic>)
             .map((row) => ChatConversation.fromJson(Map<String, dynamic>.from(row as Map)))
+            .where(_isAdminConversation)
             .toList();
+        if (list.isNotEmpty) return list;
       } catch (e) {
         debugPrint('[AdminMessaging] Supabase getConversations error: $e');
       }
@@ -184,7 +199,7 @@ class AdminMessagingRepository {
     required String text,
     String senderRole = 'admin',
     String senderName = 'PalengkeGo Admin',
-    String senderId = 'admin-market-master',
+    String senderId = 'admin_support',
     String? attachmentUrl,
   }) async {
     final now = DateTime.now();
