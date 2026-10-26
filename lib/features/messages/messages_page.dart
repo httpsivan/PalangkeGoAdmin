@@ -603,6 +603,7 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
                         key: ValueKey('bubble_${msg.id}'),
                         message: msg,
                         isRight: isRight,
+                        fallbackVendorName: conv.displayStallName,
                       ),
                     ],
                   );
@@ -692,29 +693,18 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
                 ),
               Row(
                 children: [
-                  Tooltip(
-                    message: 'Attach Photo',
-                    child: Material(
-                      color: colors.inputSurface,
-                      shape: CircleBorder(
-                        side: BorderSide(color: colors.subtleBorder),
-                      ),
-                      child: InkWell(
-                        customBorder: const CircleBorder(),
-                        onTap: _isPickingImage ? null : _pickImage,
-                        child: SizedBox(
-                          width: 42,
-                          height: 42,
-                          child: Icon(
-                            Icons.add_photo_alternate_outlined,
-                            size: 20,
-                            color: colors.accent,
-                          ),
-                        ),
-                      ),
+                  // Paperclip attachment action button matching PalengkeGoApp composer
+                  IconButton(
+                    tooltip: 'Attach photo',
+                    onPressed: _isPickingImage ? null : _pickImage,
+                    icon: Icon(
+                      Icons.attach_file_rounded,
+                      size: 24,
+                      color: colors.accent,
                     ),
+                    splashRadius: 22,
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: TextField(
                       controller: _messageController,
@@ -841,10 +831,12 @@ class _FullChatBubble extends StatelessWidget {
     super.key,
     required this.message,
     required this.isRight,
+    this.fallbackVendorName,
   });
 
   final ChatMessage message;
   final bool isRight;
+  final String? fallbackVendorName;
 
   /// Builds an attachment image using cached base64 bytes and gapless playback
   /// to prevent flickering when conversation streams rebuild.
@@ -983,9 +975,17 @@ class _FullChatBubble extends StatelessWidget {
       border = Border.all(color: colors.subtleBorder);
     }
 
+    // Display the vendor's store/sender name directly without a "Stall Holder (...)" wrapper
+    final senderName = message.senderName.trim();
+    final vendorLabel = (senderName.isNotEmpty &&
+            senderName.toLowerCase() != 'stall holder')
+        ? senderName
+        : (fallbackVendorName?.trim().isNotEmpty == true
+            ? fallbackVendorName!.trim()
+            : 'Stall Holder');
     final roleLabel = isAdmin
         ? 'PalengkeGo Market Admin'
-        : (isVendor ? 'Stall Holder (${message.senderName})' : message.senderName);
+        : (isVendor ? vendorLabel : senderName);
 
     final timeStr = DateFormat('h:mm a').format(message.timestamp.toLocal());
 
