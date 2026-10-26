@@ -96,15 +96,27 @@ class ChatMessage {
       'sender_name': senderName,
       'sender_role': senderRole,
       'text': text,
-      'timestamp': timestamp.toIso8601String(),
+      'timestamp': timestamp.toUtc().toIso8601String(),
       'is_read': isRead,
-      'read_at': readAt?.toIso8601String(),
+      'read_at': readAt?.toUtc().toIso8601String(),
       if (attachmentUrl != null) 'attachment_url': attachmentUrl,
       if (attachmentType != null) 'attachment_type': attachmentType,
     };
   }
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    DateTime parseLocal(dynamic val) {
+      if (val == null) return DateTime.now();
+      final parsed = DateTime.tryParse(val.toString());
+      return parsed != null ? parsed.toLocal() : DateTime.now();
+    }
+
+    DateTime? parseNullableLocal(dynamic val) {
+      if (val == null) return null;
+      final parsed = DateTime.tryParse(val.toString());
+      return parsed?.toLocal();
+    }
+
     return ChatMessage(
       id: (json['id'] ?? json['message_id'] ?? '').toString(),
       conversationId: (json['conversation_id'] ?? json['conversationId'] ?? '').toString(),
@@ -113,14 +125,12 @@ class ChatMessage {
       senderRole: (json['sender_role'] ?? json['senderRole'] ?? 'customer').toString(),
       text: (json['text'] ?? json['message'] ?? '').toString(),
       timestamp: json['timestamp'] != null
-          ? DateTime.tryParse(json['timestamp'].toString()) ?? DateTime.now()
+          ? parseLocal(json['timestamp'])
           : (json['created_at'] != null
-              ? DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now()
+              ? parseLocal(json['created_at'])
               : DateTime.now()),
       isRead: json['is_read'] == true || json['isRead'] == true,
-      readAt: json['read_at'] != null || json['readAt'] != null
-          ? DateTime.tryParse((json['read_at'] ?? json['readAt']).toString())
-          : null,
+      readAt: parseNullableLocal(json['read_at'] ?? json['readAt']),
       attachmentUrl: (json['attachment_url'] ?? json['attachmentUrl']) as String?,
       attachmentType: (json['attachment_type'] ?? json['attachmentType']) as String?,
     );

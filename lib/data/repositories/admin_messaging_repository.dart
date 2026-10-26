@@ -102,6 +102,18 @@ class AdminMessagingRepository {
         c.stallId == 'admin_support';
   }
 
+  bool _hasConversationStarted(ChatConversation c) {
+    final text = c.lastMessageText.trim();
+    if (text.isEmpty) return false;
+    final lower = text.toLowerCase();
+    if (lower == 'no messages yet' ||
+        lower == 'started a conversation' ||
+        lower.contains('how can the palengkego admin team help you')) {
+      return false;
+    }
+    return true;
+  }
+
   /// Returns a real-time stream of all conversations ordered by latest message.
   Stream<List<ChatConversation>> watchConversations() {
     final client = _client;
@@ -114,7 +126,7 @@ class AdminMessagingRepository {
             .map((rows) {
               return rows
                   .map((r) => ChatConversation.fromJson(r))
-                  .where(_isAdminConversation)
+                  .where((c) => _isAdminConversation(c) && _hasConversationStarted(c))
                   .toList();
             });
       } catch (e) {
@@ -135,7 +147,7 @@ class AdminMessagingRepository {
             .order('last_message_timestamp', ascending: false);
         return (response as List<dynamic>)
             .map((row) => ChatConversation.fromJson(Map<String, dynamic>.from(row as Map)))
-            .where(_isAdminConversation)
+            .where((c) => _isAdminConversation(c) && _hasConversationStarted(c))
             .toList();
       } catch (e) {
         debugPrint('[AdminMessaging] Supabase getConversations error: $e');
@@ -143,7 +155,7 @@ class AdminMessagingRepository {
     }
 
     await _ensureLoaded();
-    return List.unmodifiable(_localConversations);
+    return _localConversations.where(_hasConversationStarted).toList();
   }
 
   /// Returns a real-time stream of messages in a given [conversationId].
@@ -156,7 +168,11 @@ class AdminMessagingRepository {
             .stream(primaryKey: ['id'])
             .eq('conversation_id', conversationId)
             .order('timestamp', ascending: true)
-            .map((rows) => rows.map((r) => ChatMessage.fromJson(r)).toList());
+            .map((rows) {
+              final list = rows.map((r) => ChatMessage.fromJson(r)).toList();
+              list.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+              return list;
+            });
       } catch (e) {
         debugPrint('[AdminMessaging] Supabase watchMessages error: $e');
       }
@@ -179,16 +195,20 @@ class AdminMessagingRepository {
             .select()
             .eq('conversation_id', conversationId)
             .order('timestamp', ascending: true);
-        return (response as List<dynamic>)
+        final list = (response as List<dynamic>)
             .map((row) => ChatMessage.fromJson(Map<String, dynamic>.from(row as Map)))
             .toList();
+        list.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+        return list;
       } catch (e) {
         debugPrint('[AdminMessaging] Supabase getMessages error: $e');
       }
     }
 
     await _ensureLoaded();
-    return List.unmodifiable(_localMessages[conversationId] ?? []);
+    final localList = List<ChatMessage>.from(_localMessages[conversationId] ?? []);
+    localList.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    return List.unmodifiable(localList);
   }
 
   /// Dispatches a message from Admin to a vendor conversation thread.
@@ -199,10 +219,16 @@ class AdminMessagingRepository {
     String senderName = 'PalengkeGo Admin',
     String senderId = 'admin_support',
     String? attachmentUrl,
+    String? attachmentType,
   }) async {
     final now = DateTime.now();
-    final nowIso = now.toIso8601String();
+    final nowIso = now.toUtc().toIso8601String();
     final client = _client;
+    final previewText = text.trim().isNotEmpty
+        ? text.trim()
+        : (attachmentUrl != null && attachmentUrl.isNotEmpty ? '📷 Photo' : '');
+    final resolvedAttachmentType =
+        attachmentType ?? (attachmentUrl != null && attachmentUrl.isNotEmpty ? 'image' : null);
 
     if (client != null) {
       try {
@@ -215,15 +241,18 @@ class AdminMessagingRepository {
           'timestamp': nowIso,
           'is_read': false,
           if (attachmentUrl != null) 'attachment_url': attachmentUrl,
+          if (resolvedAttachmentType != null) 'attachment_type': resolvedAttachmentType,
         };
 
         final inserted = await client.from('messages').insert(msgRow).select().single();
         final message = ChatMessage.fromJson(Map<String, dynamic>.from(inserted));
 
         await client.from('conversations').update({
-          'last_message_text': text.trim(),
+          'last_message_text': previewText,
           'last_message_timestamp': nowIso,
           'last_message_sender_id': senderId,
+          'vendor_unread_count': 1,
+          'customer_unread_count': 0,
           'updated_at': nowIso,
         }).eq('id', conversationId);
 
@@ -244,6 +273,7 @@ class AdminMessagingRepository {
       timestamp: now,
       isRead: false,
       attachmentUrl: attachmentUrl,
+      attachmentType: resolvedAttachmentType,
     );
 
     final list = _localMessages.putIfAbsent(conversationId, () => []);
@@ -253,7 +283,7 @@ class AdminMessagingRepository {
     final convIdx = _localConversations.indexWhere((c) => c.id == conversationId);
     if (convIdx >= 0) {
       final updated = _localConversations[convIdx].copyWith(
-        lastMessageText: text.trim(),
+        lastMessageText: previewText,
         lastMessageTimestamp: now,
         lastMessageSenderId: senderId,
         updatedAt: now,
@@ -271,7 +301,7 @@ class AdminMessagingRepository {
     final client = _client;
     if (client != null) {
       try {
-        final nowIso = DateTime.now().toIso8601String();
+        final nowIso = DateTime.now().toUtc().toIso8601String();
         await client
             .from('messages')
             .update({'is_read': true, 'read_at': nowIso})
@@ -280,8 +310,6 @@ class AdminMessagingRepository {
 
         await client.from('conversations').update({
           'customer_unread_count': 0,
-          'vendor_unread_count': 0,
-          'admin_unread_count': 0,
         }).eq('id', conversationId);
       } catch (e) {
         debugPrint('[AdminMessaging] Supabase markAsRead failed: $e');

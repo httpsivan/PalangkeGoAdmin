@@ -39,6 +39,30 @@ void main() {
       expect(reconstructed.isFromVendor, isFalse);
     });
 
+    test('ChatMessage serializes UTC ISO8601 string and deserializes to local time', () {
+      final localDt = DateTime(2026, 10, 26, 20, 30); // 8:30 PM local
+      final msg = ChatMessage(
+        id: 'msg_utc_test',
+        conversationId: 'conv_1',
+        senderId: 'admin_1',
+        senderName: 'PalengkeGo Admin',
+        senderRole: 'admin',
+        text: 'Sync test',
+        timestamp: localDt,
+        isRead: true,
+      );
+
+      final json = msg.toJson();
+      expect(json['timestamp'].toString().endsWith('Z'), isTrue,
+          reason: 'Saved timestamp must be UTC ending with Z');
+
+      final parsed = ChatMessage.fromJson(json);
+      expect(parsed.timestamp.isUtc, isFalse,
+          reason: 'Parsed timestamp should be local');
+      expect(parsed.timestamp.hour, localDt.hour);
+      expect(parsed.timestamp.minute, localDt.minute);
+    });
+
     test('ChatConversation toJson and fromJson match schema', () {
       final now = DateTime(2026, 10, 24, 22, 0);
       final conv = ChatConversation(
@@ -160,6 +184,84 @@ void main() {
       expect(find.textContaining(RegExp(r'\d{1,2}:\d{2}\s+(AM|PM)')), findsWidgets);
       expect(find.textContaining('Oct 26, 2026 •'), findsNothing);
       expect(find.textContaining('Oct 26 •'), findsNothing);
+
+      repo.dispose();
+    });
+
+    testWidgets('automatically scrolls to the latest message when opening a conversation', (tester) async {
+      final repo = AdminMessagingRepository(preferences: prefs);
+
+      // Add extra messages so the list overflows vertically
+      for (int i = 1; i <= 15; i++) {
+        await repo.sendMessage(
+          conversationId: 'conv_omar_rivera_admin',
+          text: 'Auto-scroll test message #$i',
+        );
+      }
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(prefs),
+            adminMessagingRepositoryProvider.overrideWithValue(repo),
+          ],
+          child: MaterialApp(
+            theme: buildLightTheme(),
+            home: const Scaffold(
+              body: Center(
+                child: MessagesBell(),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Open panel
+      await tester.tap(find.byType(MessagesBell));
+      await tester.pumpAndSettle();
+
+      // Tap on conversation
+      await tester.tap(find.text('Omar Rivera (Sari-sari)'));
+      await tester.pumpAndSettle();
+
+      // The latest message should be visible on screen
+      expect(find.text('Auto-scroll test message #15'), findsOneWidget);
+
+      repo.dispose();
+    });
+
+    testWidgets('renders delivery and read receipt checkmark icons on admin bubbles', (tester) async {
+      final repo = AdminMessagingRepository(preferences: prefs);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(prefs),
+            adminMessagingRepositoryProvider.overrideWithValue(repo),
+          ],
+          child: MaterialApp(
+            theme: buildLightTheme(),
+            home: const Scaffold(
+              body: Center(
+                child: MessagesBell(),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(MessagesBell));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Omar Rivera (Sari-sari)'));
+      await tester.pumpAndSettle();
+
+      // Checkmarks should be present for message status (sent / read)
+      expect(find.byIcon(Icons.done_all_rounded), findsWidgets);
 
       repo.dispose();
     });

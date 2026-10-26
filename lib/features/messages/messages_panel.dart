@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import '../../core/theme/theme_extensions.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -50,6 +53,13 @@ class _MessagesPanelState extends ConsumerState<MessagesPanel>
   MessageFilter _filter = MessageFilter.all;
   String _search = '';
   ChatConversation? _selectedConversation;
+  String? _lastScrolledConversationId;
+  int _lastScrolledMessageCount = 0;
+
+  String? _selectedImageDataUri;
+  Uint8List? _selectedImageBytes;
+  String? _selectedImageName;
+  bool _isPickingImage = false;
 
   @override
   void initState() {
@@ -68,6 +78,30 @@ class _MessagesPanelState extends ConsumerState<MessagesPanel>
     super.dispose();
   }
 
+  void _scrollToBottom({bool animated = false}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      final maxScroll = _scrollController.position.maxScrollExtent;
+      if (maxScroll <= 0) return;
+
+      if (animated) {
+        _scrollController.animateTo(
+          maxScroll,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
+      } else {
+        _scrollController.jumpTo(maxScroll);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients &&
+              _scrollController.offset < _scrollController.position.maxScrollExtent) {
+            _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+          }
+        });
+      }
+    });
+  }
+
   void _close() {
     _controller.reverse().then((_) {
       if (mounted) widget.onClose();
@@ -75,37 +109,94 @@ class _MessagesPanelState extends ConsumerState<MessagesPanel>
   }
 
   void _selectConversation(ChatConversation conv) {
-    setState(() => _selectedConversation = conv);
+    setState(() {
+      _selectedConversation = conv;
+      _lastScrolledConversationId = null;
+      _lastScrolledMessageCount = 0;
+      _selectedImageDataUri = null;
+      _selectedImageBytes = null;
+      _selectedImageName = null;
+    });
     ref.read(adminMessagingRepositoryProvider).markAsRead(conv.id);
   }
 
   void _backToList() {
-    setState(() => _selectedConversation = null);
+    setState(() {
+      _selectedConversation = null;
+      _lastScrolledConversationId = null;
+      _lastScrolledMessageCount = 0;
+      _selectedImageDataUri = null;
+      _selectedImageBytes = null;
+      _selectedImageName = null;
+    });
+  }
+
+  Future<void> _pickImage() async {
+    if (_isPickingImage) return;
+    setState(() => _isPickingImage = true);
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        withData: true,
+      );
+      if (result != null && result.files.isNotEmpty && mounted) {
+        final file = result.files.first;
+        final bytes = file.bytes;
+        if (bytes != null && bytes.isNotEmpty) {
+          final ext = (file.extension ?? 'jpeg').toLowerCase();
+          final mime = ext == 'png'
+              ? 'png'
+              : ext == 'gif'
+                  ? 'gif'
+                  : ext == 'webp'
+                      ? 'webp'
+                      : 'jpeg';
+          final dataUri = 'data:image/$mime;base64,${base64Encode(bytes)}';
+          setState(() {
+            _selectedImageBytes = bytes;
+            _selectedImageDataUri = dataUri;
+            _selectedImageName = file.name;
+          });
+        }
+      }
+    } catch (_) {
+      // Ignore picker cancellation or platform error
+    } finally {
+      if (mounted) {
+        setState(() => _isPickingImage = false);
+      }
+    }
+  }
+
+  void _clearSelectedImage() {
+    setState(() {
+      _selectedImageDataUri = null;
+      _selectedImageBytes = null;
+      _selectedImageName = null;
+    });
   }
 
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
-    if (text.isEmpty || _selectedConversation == null) return;
+    final attachment = _selectedImageDataUri;
+    if ((text.isEmpty && (attachment == null || attachment.isEmpty)) ||
+        _selectedConversation == null) {
+      return;
+    }
     final convId = _selectedConversation!.id;
     _messageController.clear();
+    _clearSelectedImage();
 
     await ref.read(adminMessagingRepositoryProvider).sendMessage(
           conversationId: convId,
           text: text,
           senderRole: 'admin',
           senderName: 'PalengkeGo Admin',
+          attachmentUrl: attachment,
+          attachmentType: attachment != null ? 'image' : null,
         );
 
-    // Scroll to bottom
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOut,
-        );
-      }
-    });
+    _scrollToBottom(animated: true);
   }
 
   @override
@@ -205,6 +296,10 @@ class _MessagesPanelState extends ConsumerState<MessagesPanel>
 
   List<ChatConversation> _filterConversations(List<ChatConversation> list) {
     return list.where((c) {
+      final text = c.lastMessageText.trim();
+      if (text.isEmpty || text.toLowerCase() == 'no messages yet') {
+        return false;
+      }
       if (_filter == MessageFilter.unread && !c.hasUnreadForAdmin) return false;
 
       if (_search.isNotEmpty) {
@@ -481,23 +576,36 @@ class _MessagesPanelState extends ConsumerState<MessagesPanel>
                   ),
                 );
               }
+
+              if (_lastScrolledConversationId != conv.id) {
+                _lastScrolledConversationId = conv.id;
+                _lastScrolledMessageCount = messages.length;
+                _scrollToBottom(animated: false);
+              } else if (_lastScrolledMessageCount != messages.length) {
+                _lastScrolledMessageCount = messages.length;
+                _scrollToBottom(animated: true);
+              }
+
+              final sortedMessages = List<ChatMessage>.from(messages)
+                ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+
               return ListView.builder(
                 controller: _scrollController,
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                itemCount: messages.length,
+                itemCount: sortedMessages.length,
                 itemBuilder: (context, index) {
-                  final msg = messages[index];
-                  final prevMsg = index > 0 ? messages[index - 1] : null;
+                  final msg = sortedMessages[index];
+                  final prevMsg = index > 0 ? sortedMessages[index - 1] : null;
                   final isNewDay = prevMsg == null ||
-                      msg.timestamp.year != prevMsg.timestamp.year ||
-                      msg.timestamp.month != prevMsg.timestamp.month ||
-                      msg.timestamp.day != prevMsg.timestamp.day;
+                      msg.timestamp.toLocal().year != prevMsg.timestamp.toLocal().year ||
+                      msg.timestamp.toLocal().month != prevMsg.timestamp.toLocal().month ||
+                      msg.timestamp.toLocal().day != prevMsg.timestamp.toLocal().day;
 
                   final isRight = msg.isFromAdmin;
 
                   return Column(
                     children: [
-                      if (isNewDay) _PanelDateDivider(date: msg.timestamp),
+                      if (isNewDay) _PanelDateDivider(date: msg.timestamp.toLocal()),
                       _ChatBubble(
                         message: msg,
                         isRight: isRight,
@@ -517,47 +625,143 @@ class _MessagesPanelState extends ConsumerState<MessagesPanel>
             color: colors.elevatedSurface,
             border: Border(top: BorderSide(color: colors.subtleBorder)),
           ),
-          child: Row(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: TextField(
-                  controller: _messageController,
-                  style: TextStyle(fontSize: 12.5, color: colors.primaryText),
-                  onSubmitted: (_) => _sendMessage(),
-                  decoration: InputDecoration(
-                    hintText: 'Type admin message as Market Master...',
-                    hintStyle: TextStyle(fontSize: 11.5, color: colors.mutedText),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    filled: true,
-                    fillColor: colors.inputSurface,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      borderSide: BorderSide(color: colors.subtleBorder),
+              if (_selectedImageBytes != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: colors.inputSurface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: colors.subtleBorder),
                     ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      borderSide: BorderSide(color: colors.subtleBorder),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      borderSide: BorderSide(color: colors.accent, width: 1.2),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.memory(
+                            _selectedImageBytes!,
+                            width: 48,
+                            height: 48,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _selectedImageName ?? 'Photo attached',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: colors.primaryText,
+                                ),
+                              ),
+                              Text(
+                                'Ready to send',
+                                style: TextStyle(
+                                  fontSize: 9.5,
+                                  color: colors.secondaryText,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        InkWell(
+                          onTap: _clearSelectedImage,
+                          borderRadius: BorderRadius.circular(12),
+                          child: Padding(
+                            padding: const EdgeInsets.all(4),
+                            child: Icon(
+                              Icons.close_rounded,
+                              size: 16,
+                              color: colors.mutedText,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Material(
-                color: colors.accent,
-                shape: const CircleBorder(),
-                child: InkWell(
-                  customBorder: const CircleBorder(),
-                  onTap: _sendMessage,
-                  child: const SizedBox(
-                    width: 38,
-                    height: 38,
-                    child: Icon(Icons.send_rounded, size: 18, color: Colors.white),
+              Row(
+                children: [
+                  Tooltip(
+                    message: 'Attach Photo',
+                    child: Material(
+                      color: colors.inputSurface,
+                      shape: CircleBorder(
+                        side: BorderSide(color: colors.subtleBorder),
+                      ),
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: _isPickingImage ? null : _pickImage,
+                        child: SizedBox(
+                          width: 36,
+                          height: 36,
+                          child: Icon(
+                            Icons.add_photo_alternate_outlined,
+                            size: 18,
+                            color: colors.accent,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: _messageController,
+                      style: TextStyle(fontSize: 12.5, color: colors.primaryText),
+                      onSubmitted: (_) => _sendMessage(),
+                      decoration: InputDecoration(
+                        hintText: _selectedImageBytes != null
+                            ? 'Add a caption or press send...'
+                            : 'Type admin message as Market Master...',
+                        hintStyle: TextStyle(fontSize: 11.5, color: colors.mutedText),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        filled: true,
+                        fillColor: colors.inputSurface,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          borderSide: BorderSide(color: colors.subtleBorder),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          borderSide: BorderSide(color: colors.subtleBorder),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          borderSide: BorderSide(color: colors.accent, width: 1.2),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Material(
+                    color: colors.accent,
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: _sendMessage,
+                      child: const SizedBox(
+                        width: 38,
+                        height: 38,
+                        child: Icon(Icons.send_rounded, size: 18, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -730,6 +934,119 @@ class _ChatBubble extends StatelessWidget {
   final ChatMessage message;
   final bool isRight;
 
+  Widget _buildImageWidget(String url, {BoxFit fit = BoxFit.cover}) {
+    if (url.startsWith('data:image')) {
+      try {
+        final commaIdx = url.indexOf(',');
+        if (commaIdx != -1) {
+          final bytes = base64Decode(url.substring(commaIdx + 1));
+          return Image.memory(
+            bytes,
+            fit: fit,
+            errorBuilder: (_, __, ___) => _brokenImagePlaceholder(),
+          );
+        }
+      } catch (_) {
+        return _brokenImagePlaceholder();
+      }
+    }
+    return Image.network(
+      url,
+      fit: fit,
+      errorBuilder: (_, __, ___) => _brokenImagePlaceholder(),
+    );
+  }
+
+  Widget _brokenImagePlaceholder() {
+    return Container(
+      width: 180,
+      height: 120,
+      color: Colors.black12,
+      child: const Center(
+        child: Icon(Icons.broken_image_rounded, color: Colors.grey, size: 28),
+      ),
+    );
+  }
+
+  void _openFullScreenImage(BuildContext context, String url) {
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(24),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            InteractiveViewer(
+              minScale: 0.8,
+              maxScale: 4.0,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: _buildImageWidget(url, fit: BoxFit.contain),
+              ),
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: Material(
+                color: Colors.black54,
+                shape: const CircleBorder(),
+                child: IconButton(
+                  icon: const Icon(Icons.close_rounded, color: Colors.white),
+                  onPressed: () => Navigator.of(ctx).pop(),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAttachment(BuildContext context) {
+    final url = message.attachmentUrl!;
+    return GestureDetector(
+      onTap: () => _openFullScreenImage(context, url),
+      child: Container(
+        margin: EdgeInsets.only(bottom: message.text.trim().isNotEmpty ? 6 : 2),
+        constraints: const BoxConstraints(
+          maxHeight: 200,
+          minHeight: 100,
+          minWidth: 140,
+        ),
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          color: Colors.black.withValues(alpha: .06),
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          fit: StackFit.passthrough,
+          children: [
+            _buildImageWidget(url, fit: BoxFit.cover),
+            Positioned(
+              right: 6,
+              bottom: 6,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: .55),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.zoom_in_rounded,
+                  color: Colors.white,
+                  size: 14,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = semanticColors(context);
@@ -758,7 +1075,7 @@ class _ChatBubble extends StatelessWidget {
         ? 'PalengkeGo Admin'
         : (isVendor ? 'Stall Holder (${message.senderName})' : message.senderName);
 
-    final timeStr = DateFormat('h:mm a').format(message.timestamp);
+    final timeStr = DateFormat('h:mm a').format(message.timestamp.toLocal());
 
     return Align(
       alignment: isRight ? Alignment.centerRight : Alignment.centerLeft,
@@ -815,27 +1132,22 @@ class _ChatBubble extends StatelessWidget {
                       color: isAdmin ? Colors.white.withValues(alpha: .8) : colors.mutedText,
                     ),
                   ),
-                  const SizedBox(width: 6),
-                  Flexible(
-                    child: Text(
-                      roleLabel,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w700,
-                        color: isAdmin ? Colors.white : (isDark ? colors.accent : const Color(0xFF047857)),
-                      ),
-                    ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    message.isRead ? Icons.done_all_rounded : Icons.done_rounded,
+                    size: 12,
+                    color: message.isRead ? Colors.white : Colors.white70,
                   ),
                 ],
               ],
             ),
             const SizedBox(height: 4),
-            Text(
-              message.text,
-              style: TextStyle(fontSize: 12, color: fg, height: 1.35),
-            ),
+            if (message.hasAttachment) _buildAttachment(context),
+            if (message.text.trim().isNotEmpty)
+              Text(
+                message.text,
+                style: TextStyle(fontSize: 12, color: fg, height: 1.35),
+              ),
           ],
         ),
       ),

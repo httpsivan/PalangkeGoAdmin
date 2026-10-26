@@ -141,20 +141,26 @@ class ChatConversation {
       'customer_name': customerName,
       'customer_avatar': customerAvatar,
       'last_message_text': lastMessageText,
-      'last_message_timestamp': lastMessageTimestamp.toIso8601String(),
+      'last_message_timestamp': lastMessageTimestamp.toUtc().toIso8601String(),
       'last_message_sender_id': lastMessageSenderId,
       'customer_unread_count': customerUnreadCount,
       'vendor_unread_count': vendorUnreadCount,
       'admin_unread_count': adminUnreadCount,
       'inquiry_type': inquiryType,
       'related_order_id': relatedOrderId,
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
+      'updated_at': updatedAt.toUtc().toIso8601String(),
     };
   }
 
   /// Deserializes a conversation from a database row or JSON map.
   factory ChatConversation.fromJson(Map<String, dynamic> json) {
+    DateTime parseLocal(dynamic val) {
+      if (val == null) return DateTime.now();
+      final parsed = DateTime.tryParse(val.toString());
+      return parsed != null ? parsed.toLocal() : DateTime.now();
+    }
+
     return ChatConversation(
       id: (json['id'] ?? json['conversation_id'] ?? '').toString(),
       stallId: (json['stall_id'] ?? json['stallId'] ?? '').toString(),
@@ -165,10 +171,9 @@ class ChatConversation {
       customerAvatar: (json['customer_avatar'] ?? json['customerAvatar']) as String?,
       lastMessageText: (json['last_message_text'] ?? json['lastMessageText'] ?? '').toString(),
       lastMessageTimestamp: json['last_message_timestamp'] != null || json['lastMessageTimestamp'] != null
-          ? DateTime.tryParse((json['last_message_timestamp'] ?? json['lastMessageTimestamp']).toString()) ??
-              DateTime.now()
+          ? parseLocal(json['last_message_timestamp'] ?? json['lastMessageTimestamp'])
           : (json['updated_at'] != null
-              ? DateTime.tryParse(json['updated_at'].toString()) ?? DateTime.now()
+              ? parseLocal(json['updated_at'])
               : DateTime.now()),
       lastMessageSenderId: (json['last_message_sender_id'] ?? json['lastMessageSenderId'] ?? '').toString(),
       customerUnreadCount: (json['customer_unread_count'] ?? json['customerUnreadCount'] as num?)?.toInt() ?? 0,
@@ -177,10 +182,10 @@ class ChatConversation {
       inquiryType: (json['inquiry_type'] ?? json['inquiryType'] ?? 'general').toString(),
       relatedOrderId: (json['related_order_id'] ?? json['relatedOrderId']) as String?,
       createdAt: json['created_at'] != null || json['createdAt'] != null
-          ? DateTime.tryParse((json['created_at'] ?? json['createdAt']).toString()) ?? DateTime.now()
+          ? parseLocal(json['created_at'] ?? json['createdAt'])
           : DateTime.now(),
       updatedAt: json['updated_at'] != null || json['updatedAt'] != null
-          ? DateTime.tryParse((json['updated_at'] ?? json['updatedAt']).toString()) ?? DateTime.now()
+          ? parseLocal(json['updated_at'] ?? json['updatedAt'])
           : DateTime.now(),
     );
   }
