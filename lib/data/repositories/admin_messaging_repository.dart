@@ -112,11 +112,10 @@ class AdminMessagingRepository {
             .stream(primaryKey: ['id'])
             .order('last_message_timestamp', ascending: false)
             .map((rows) {
-              final list = rows
+              return rows
                   .map((r) => ChatConversation.fromJson(r))
                   .where(_isAdminConversation)
                   .toList();
-              return list.isNotEmpty ? list : List.unmodifiable(_localConversations);
             });
       } catch (e) {
         debugPrint('[AdminMessaging] Supabase stream error, falling back to local: $e');
@@ -134,11 +133,10 @@ class AdminMessagingRepository {
             .from('conversations')
             .select()
             .order('last_message_timestamp', ascending: false);
-        final list = (response as List<dynamic>)
+        return (response as List<dynamic>)
             .map((row) => ChatConversation.fromJson(Map<String, dynamic>.from(row as Map)))
             .where(_isAdminConversation)
             .toList();
-        if (list.isNotEmpty) return list;
       } catch (e) {
         debugPrint('[AdminMessaging] Supabase getConversations error: $e');
       }
