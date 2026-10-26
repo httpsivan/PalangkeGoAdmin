@@ -758,7 +758,7 @@ class _ChatBubble extends StatelessWidget {
         ? 'PalengkeGo Admin'
         : (isVendor ? 'Stall Holder (${message.senderName})' : message.senderName);
 
-    final dateStr = DateFormat('MMM d • h:mm a').format(message.timestamp);
+    final timeStr = DateFormat('h:mm a').format(message.timestamp);
 
     return Align(
       alignment: isRight ? Alignment.centerRight : Alignment.centerLeft,
@@ -780,22 +780,26 @@ class _ChatBubble extends StatelessWidget {
           crossAxisAlignment:
               isRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
-            // Sender and Date at top of message
+            // Sender and Time at top of message
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (!isRight) ...[
-                  Text(
-                    roleLabel,
-                    style: TextStyle(
-                      fontSize: 9.5,
-                      fontWeight: FontWeight.w700,
-                      color: colors.secondaryText,
+                  Flexible(
+                    child: Text(
+                      roleLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w700,
+                        color: colors.secondaryText,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    dateStr,
+                    timeStr,
                     style: TextStyle(
                       fontSize: 8.5,
                       fontWeight: FontWeight.w500,
@@ -804,7 +808,7 @@ class _ChatBubble extends StatelessWidget {
                   ),
                 ] else ...[
                   Text(
-                    dateStr,
+                    timeStr,
                     style: TextStyle(
                       fontSize: 8.5,
                       fontWeight: FontWeight.w500,
@@ -812,12 +816,16 @@ class _ChatBubble extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 6),
-                  Text(
-                    roleLabel,
-                    style: TextStyle(
-                      fontSize: 9.5,
-                      fontWeight: FontWeight.w700,
-                      color: isAdmin ? Colors.white : (isDark ? colors.accent : const Color(0xFF047857)),
+                  Flexible(
+                    child: Text(
+                      roleLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w700,
+                        color: isAdmin ? Colors.white : (isDark ? colors.accent : const Color(0xFF047857)),
+                      ),
                     ),
                   ),
                 ],

@@ -152,6 +152,15 @@ void main() {
       // Verify popup panel opened with title
       expect(find.text('Messages'), findsOneWidget);
 
+      // Tap on the first conversation to open thread
+      await tester.tap(find.text('Omar Rivera (Sari-sari)'));
+      await tester.pumpAndSettle();
+
+      // Verify bubble contains time (e.g. AM / PM) and does NOT contain month/year date
+      expect(find.textContaining(RegExp(r'\d{1,2}:\d{2}\s+(AM|PM)')), findsWidgets);
+      expect(find.textContaining('Oct 26, 2026 •'), findsNothing);
+      expect(find.textContaining('Oct 26 •'), findsNothing);
+
       repo.dispose();
     });
   });

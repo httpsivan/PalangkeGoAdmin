@@ -666,7 +666,7 @@ class _FullChatBubble extends StatelessWidget {
         ? 'PalengkeGo Market Admin'
         : (isVendor ? 'Stall Holder (${message.senderName})' : message.senderName);
 
-    final dateStr = DateFormat('MMM d, yyyy • h:mm a').format(message.timestamp);
+    final timeStr = DateFormat('h:mm a').format(message.timestamp);
 
     return Align(
       alignment: isRight ? Alignment.centerRight : Alignment.centerLeft,
@@ -695,24 +695,28 @@ class _FullChatBubble extends StatelessWidget {
           crossAxisAlignment:
               isRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
-            // Sender and Date at the top of the message
+            // Sender and Time at the top of the message
             Row(
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment:
                   isRight ? MainAxisAlignment.end : MainAxisAlignment.start,
               children: [
                 if (!isRight) ...[
-                  Text(
-                    roleLabel,
-                    style: TextStyle(
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w700,
-                      color: colors.secondaryText,
+                  Flexible(
+                    child: Text(
+                      roleLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                        color: colors.secondaryText,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    dateStr,
+                    timeStr,
                     style: TextStyle(
                       fontSize: 9.5,
                       fontWeight: FontWeight.w500,
@@ -721,7 +725,7 @@ class _FullChatBubble extends StatelessWidget {
                   ),
                 ] else ...[
                   Text(
-                    dateStr,
+                    timeStr,
                     style: TextStyle(
                       fontSize: 9.5,
                       fontWeight: FontWeight.w500,
@@ -729,12 +733,16 @@ class _FullChatBubble extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    roleLabel,
-                    style: TextStyle(
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w700,
-                      color: isAdmin ? Colors.white : (isDark ? colors.accent : const Color(0xFF047857)),
+                  Flexible(
+                    child: Text(
+                      roleLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                        color: isAdmin ? Colors.white : (isDark ? colors.accent : const Color(0xFF047857)),
+                      ),
                     ),
                   ),
                 ],
