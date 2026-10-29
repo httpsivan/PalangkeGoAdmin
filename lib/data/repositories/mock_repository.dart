@@ -235,6 +235,7 @@ class AppDataController extends StateNotifier<AppDataState> {
       }
     }
     state = state.copyWith(
+      suspensions: accounts?.suspensions ?? state.suspensions,
       vendors: accounts?.vendors ?? data?.vendors,
       customers: accounts?.customers ?? data?.customers,
       applications: applications ?? data?.applications,
@@ -338,11 +339,47 @@ class AppDataController extends StateNotifier<AppDataState> {
     );
   }
 
+  Future<void> saveAccountNotes(String id, String notes,
+      {required bool isVendor}) async {
+    if (supabaseEnabled && _supabase != null) {
+      final error = await _supabase.moderateAccount(id, 'notes',
+          notes: notes, notifyUser: false);
+      if (error != null) throw StateError(error);
+      await reload();
+      return;
+    }
+    if (firebaseEnabled) {
+      throw StateError('Saving notes requires the Supabase admin backend.');
+    }
+    if (isVendor) {
+      final account = state.vendors.firstWhere((item) => item.id == id);
+      await updateVendorAccount(id,
+          status: account.status, administrativeNotes: notes);
+    } else {
+      final account = state.customers.firstWhere((item) => item.id == id);
+      await updateCustomerAccount(id,
+          status: account.status, administrativeNotes: notes);
+    }
+  }
+
   Future<void> updateVendorAccount(
     String id, {
     required AccountStatus status,
     required String administrativeNotes,
   }) async {
+    if (supabaseEnabled && _supabase != null) {
+      final previous = state.vendors.where((item) => item.id == id).firstOrNull;
+      final operation = previous?.status == status
+          ? 'notes'
+          : status == AccountStatus.blocked
+              ? 'block'
+              : 'unblock';
+      final error = await _supabase.moderateAccount(id, operation,
+          notes: administrativeNotes);
+      if (error != null) throw StateError(error);
+      await reload();
+      return;
+    }
     if (firebaseEnabled || supabaseEnabled) {
       if (status == AccountStatus.blocked || status == AccountStatus.active) {
         await _setAccountBlocked(id, status == AccountStatus.blocked);
@@ -523,6 +560,20 @@ class AppDataController extends StateNotifier<AppDataState> {
     required AccountStatus status,
     required String administrativeNotes,
   }) async {
+    if (supabaseEnabled && _supabase != null) {
+      final previous =
+          state.customers.where((item) => item.id == id).firstOrNull;
+      final operation = previous?.status == status
+          ? 'notes'
+          : status == AccountStatus.blocked
+              ? 'block'
+              : 'unblock';
+      final error = await _supabase.moderateAccount(id, operation,
+          notes: administrativeNotes);
+      if (error != null) throw StateError(error);
+      await reload();
+      return;
+    }
     if (firebaseEnabled || supabaseEnabled) {
       if (status == AccountStatus.blocked || status == AccountStatus.active) {
         await _setAccountBlocked(id, status == AccountStatus.blocked);
@@ -1292,6 +1343,19 @@ class AppDataController extends StateNotifier<AppDataState> {
     if (endDate.isBefore(DateTime.now())) {
       return 'The suspension cannot end in the past.';
     }
+    if (supabaseEnabled && _supabase != null) {
+      final error = await _supabase.moderateAccount(accountId, 'suspend',
+          notes: note,
+          reason: reason,
+          startDate: startDate,
+          endDate: endDate,
+          notifyUser: notifyUser);
+      if (error == null) await reload();
+      return error;
+    }
+    if (firebaseEnabled) {
+      return 'Suspension requires the Supabase admin backend.';
+    }
     final vendor =
         _firstOrNull(state.vendors.where((item) => item.id == accountId));
     final customer = _firstOrNull(
@@ -1357,6 +1421,15 @@ class AppDataController extends StateNotifier<AppDataState> {
       state.suspensions.where((item) => item.id == suspensionId),
     );
     if (current == null) return 'Suspension not found.';
+    if (supabaseEnabled && _supabase != null) {
+      final error = await _supabase.moderateAccount(current.accountId, 'lift',
+          suspensionId: suspensionId);
+      if (error == null) await reload();
+      return error;
+    }
+    if (firebaseEnabled) {
+      return 'Suspension requires the Supabase admin backend.';
+    }
     final lifted = current.lift(DateTime.now());
     state = state.copyWith(
       suspensions: state.suspensions

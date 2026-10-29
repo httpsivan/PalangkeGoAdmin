@@ -18,10 +18,14 @@ final supabaseAdminServiceProvider = Provider<SupabaseAdminService>((ref) {
 });
 
 class SupabaseAccounts {
-  const SupabaseAccounts({required this.vendors, required this.customers});
+  const SupabaseAccounts(
+      {required this.vendors,
+      required this.customers,
+      this.suspensions = const []});
 
   final List<Vendor> vendors;
   final List<Customer> customers;
+  final List<Suspension> suspensions;
 }
 
 Report mapSupabaseComplaintRow(Map<String, dynamic> row) {
@@ -155,6 +159,30 @@ class SupabaseAdminService {
           .map((row) => Map<String, dynamic>.from(row as Map))
           .toList();
 
+      final notesByUser = <String, String>{
+        for (final row in response['notes'] as List? ?? [])
+          row['user_id'].toString(): (row['notes'] ?? '').toString(),
+      };
+      final suspensions = (response['suspensions'] as List? ?? []).map((row) {
+        final user =
+            users.where((u) => u['user_id'] == row['user_id']).firstOrNull;
+        return Suspension(
+          id: row['id'].toString(),
+          accountId: row['user_id'].toString(),
+          accountName: (user?['full_name'] ?? '').toString(),
+          accountType:
+              user?['role'] == 'customer' ? 'Customer' : 'Stall Holder',
+          reason: row['reason'].toString(),
+          note: (row['note'] ?? '').toString(),
+          startDate: DateTime.parse(row['starts_at']).toLocal(),
+          endDate: DateTime.parse(row['ends_at']).toLocal(),
+          createdAt: DateTime.parse(row['created_at']).toLocal(),
+          administratorId: row['admin_id'].toString(),
+          notifyUser: row['notify_user'] == true,
+          liftedAt:
+              DateTime.tryParse(row['lifted_at']?.toString() ?? '')?.toLocal(),
+        );
+      }).toList();
       final stallByUser = <String, Map<String, dynamic>>{};
       for (final stall in stalls) {
         stallByUser[(stall['user_id'] ?? '').toString()] = stall;
@@ -187,7 +215,9 @@ class SupabaseAdminService {
         final role = (user['role'] ?? '').toString().toLowerCase();
         final status = user['is_blocked'] == true
             ? AccountStatus.blocked
-            : AccountStatus.active;
+            : suspensions.any((item) => item.accountId == id && item.isActive)
+                ? AccountStatus.suspended
+                : AccountStatus.active;
         final createdAt =
             DateTime.tryParse(user['created_at']?.toString() ?? '') ??
                 DateTime.now();
@@ -203,6 +233,7 @@ class SupabaseAdminService {
             stallType: (stall['category'] ?? 'Unassigned').toString(),
             registeredAt: createdAt,
             status: status,
+            administrativeNotes: notesByUser[id] ?? '',
             location: [
               if (stallNumber.isNotEmpty) 'Stall $stallNumber',
               if (floor.isNotEmpty) 'Floor $floor',
@@ -221,10 +252,12 @@ class SupabaseAdminService {
             registeredAt: createdAt,
             transactions: customerOrderCounts[customerId] ?? 0,
             status: status,
+            administrativeNotes: notesByUser[id] ?? '',
           ));
         }
       }
-      return SupabaseAccounts(vendors: vendors, customers: customers);
+      return SupabaseAccounts(
+          vendors: vendors, customers: customers, suspensions: suspensions);
     } catch (e) {
       debugPrint('[admin] Supabase fetchAccounts failed: $e');
       rethrow;
@@ -763,6 +796,54 @@ class SupabaseAdminService {
     } catch (e) {
       debugPrint('[admin] Supabase fetchOrders failed: $e');
       rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> fetchAccountHistory(String userId) =>
+      _invoke('account-history', {'userId': userId});
+
+  Future<List<AdminProduct>> fetchVendorProducts(String userId) async {
+    final response = await _invoke('stall-products', {'userId': userId});
+    return (response['products'] as List<dynamic>? ?? const [])
+        .map((row) =>
+            AdminProduct.fromJson(Map<String, dynamic>.from(row as Map)))
+        .toList();
+  }
+
+  Future<void> sendProductPriceWarning({
+    required String productId,
+    required String message,
+  }) async {
+    await _invoke('warn-product-price', {
+      'productId': productId,
+      'message': message.trim(),
+    });
+  }
+
+  Future<String?> moderateAccount(
+    String userId,
+    String operation, {
+    String? notes,
+    String? reason,
+    DateTime? startDate,
+    DateTime? endDate,
+    bool notifyUser = true,
+    String? suspensionId,
+  }) async {
+    try {
+      await _invoke('moderate-account', {
+        'userId': userId,
+        'operation': operation,
+        'notes': notes,
+        'reason': reason,
+        'startDate': startDate?.toUtc().toIso8601String(),
+        'endDate': endDate?.toUtc().toIso8601String(),
+        'notifyUser': notifyUser,
+        'suspensionId': suspensionId,
+      });
+      return null;
+    } catch (error) {
+      return error.toString();
     }
   }
 

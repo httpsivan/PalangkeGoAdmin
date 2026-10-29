@@ -2,6 +2,60 @@ import 'package:intl/intl.dart';
 
 import 'app_models.dart';
 
+class AdminProduct {
+  const AdminProduct({
+    required this.id,
+    required this.name,
+    required this.category,
+    required this.unit,
+    required this.stockQuantity,
+    required this.isInStock,
+    this.description = '',
+    this.pricePerKg,
+    this.pricePerPiece,
+    this.imageUrl,
+    this.stallName = '',
+    this.stallLocation = '',
+  });
+
+  factory AdminProduct.fromJson(Map<String, dynamic> json) => AdminProduct(
+        id: (json['product_id'] ?? '').toString(),
+        name: (json['product_name'] ?? 'Unnamed product').toString(),
+        category: (json['category_tag'] ?? '').toString(),
+        description: (json['description'] ?? '').toString(),
+        unit: (json['unit'] ?? '').toString(),
+        pricePerKg: (json['price_per_kg'] as num?)?.toDouble(),
+        pricePerPiece: (json['price_per_piece'] as num?)?.toDouble(),
+        stockQuantity: (json['stock_quantity'] as num?)?.toDouble() ?? 0,
+        isInStock: json['is_in_stock'] == true,
+        imageUrl: json['image_url']?.toString(),
+        stallName: (json['stall_name'] ?? '').toString(),
+        stallLocation: (json['stall_location'] ?? '').toString(),
+      );
+
+  final String id;
+  final String name;
+  final String category;
+  final String description;
+  final String unit;
+  final double? pricePerKg;
+  final double? pricePerPiece;
+  final double stockQuantity;
+  final bool isInStock;
+  final String? imageUrl;
+  final String stallName;
+  final String stallLocation;
+
+  bool get isPiece => unit == 'piece' || unit == 'pc';
+
+  double? get listedPrice {
+    final price = isPiece ? pricePerPiece : pricePerKg;
+    return price != null && price.isFinite && price >= 0 ? price : null;
+  }
+
+  String get priceUnit => isPiece ? 'piece' : 'kg';
+}
+
 enum OrderStatus { pending, processing, completed, cancelled, refunded }
 
 enum PaymentStatus { pending, paid, failed, refunded, partiallyRefunded }

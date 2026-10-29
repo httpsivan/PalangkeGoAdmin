@@ -9,6 +9,7 @@ import '../../core/utils/export/module_export_data_builders.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/admin_widgets.dart';
 import '../../data/repositories/mock_repository.dart';
+import '../../data/repositories/supabase_admin_service.dart';
 import '../../models/admin_models.dart';
 import '../../models/app_models.dart';
 import 'stall_products_dialog.dart';
@@ -701,10 +702,23 @@ class _VendorTable extends StatelessWidget {
                       icon: const Icon(Icons.inventory_2_outlined, size: 16),
                       tooltip: 'View Stall Products & Inventory',
                     ),
-                    IconButton(
-                      onPressed: () => onOpen(vendor),
-                      icon: const Icon(Icons.open_in_new_rounded, size: 15),
-                      tooltip: 'Open Account Details',
+                OutlinedButton(
+                  onPressed: () => onOpen(vendor),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF0D5C4B),
+                    backgroundColor: const Color(0xFFE8F5F1),
+                    side: const BorderSide(color: Color(0xFFB7DCD1)),
+                    minimumSize: const Size(62, 32),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    visualDensity: VisualDensity.compact,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(7),
+                    ),
+                  ),
+                  child: const Text(
+                    'View',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
                     ),
                   ],
                 ),
@@ -853,7 +867,11 @@ Suspension? _suspensionForAccount(
   String accountId,
 ) {
   for (final suspension in suspensions) {
-    if (suspension.accountId == accountId) return suspension;
+    if (suspension.accountId == accountId &&
+        suspension.liftedAt == null &&
+        !suspension.isExpired) {
+      return suspension;
+    }
   }
   return null;
 }
@@ -932,7 +950,10 @@ Future<void> showAccountDialog(
                         child: _AccountDetailsDialog(
                           account: account,
                           closeRequests: closeRequests,
-                          onSave: (notes) => update(notes, account.status),
+                          onSave: (notes) => ref
+                              .read(appDataProvider.notifier)
+                              .saveAccountNotes(account.id, notes,
+                                  isVendor: vendor != null),
                           onUnblock: account.status == AccountStatus.blocked
                               ? (notes) => update(notes, AccountStatus.active)
                               : null,
@@ -941,9 +962,12 @@ Future<void> showAccountDialog(
                               : null,
                           onLift: account.suspension != null &&
                                   account.suspension!.liftedAt == null
-                              ? (_) => ref
-                                  .read(appDataProvider.notifier)
-                                  .liftSuspension(account.suspension!.id)
+                              ? (_) async {
+                                  final error = await ref
+                                      .read(appDataProvider.notifier)
+                                      .liftSuspension(account.suspension!.id);
+                                  if (error != null) throw StateError(error);
+                                }
                               : null,
                           onSuspend: account.status != AccountStatus.blocked &&
                                   (account.suspension == null ||
@@ -1036,15 +1060,22 @@ Future<bool?> showSuspensionDialog(
       firstDate: start ? DateTime.now() : startDate,
       lastDate: DateTime.now().add(const Duration(days: 3650)),
     );
-    if (selected == null) return;
+    if (selected == null || !dialogContext.mounted) return;
+    final time = await showTimePicker(
+      context: dialogContext,
+      initialTime: TimeOfDay.fromDateTime(start ? startDate : endDate),
+    );
+    if (time == null || !dialogContext.mounted) return;
+    final selectedDateTime = DateTime(
+        selected.year, selected.month, selected.day, time.hour, time.minute);
     setDialogState(() {
       if (start) {
-        startDate = selected;
+        startDate = selectedDateTime;
         if (!endDate.isAfter(startDate)) {
           endDate = startDate.add(const Duration(days: 1));
         }
       } else {
-        endDate = selected;
+        endDate = selectedDateTime;
       }
     });
   }
@@ -1114,7 +1145,7 @@ Future<bool?> showSuspensionDialog(
                         setDialogState(() => notifyUser = value ?? true),
                     title: const Text('Notify the account holder'),
                     subtitle: const Text(
-                        'Delivery is recorded locally in demo mode.'),
+                        'Send the reason and schedule to the account holder’s notifications. Internal notes stay private.'),
                   ),
                 ],
               ),
@@ -1193,277 +1224,6 @@ Widget _dateButton(
         ],
       ),
     );
-
-class _AccountDrawer extends ConsumerStatefulWidget {
-  const _AccountDrawer({required this.vendor});
-  final Vendor vendor;
-  @override
-  ConsumerState<_AccountDrawer> createState() => _AccountDrawerState();
-}
-
-class _AccountDrawerState extends ConsumerState<_AccountDrawer> {
-  late AccountStatus current = widget.vendor.status;
-  @override
-  Widget build(BuildContext context) {
-    final vendor = ref.watch(appDataProvider).vendors.firstWhere(
-          (item) => item.id == widget.vendor.id,
-          orElse: () => widget.vendor,
-        );
-    final colors = semanticColors(context);
-    return Material(
-      color: colors.elevatedSurface,
-      child: SafeArea(
-        child: SizedBox(
-          width: MediaQuery.sizeOf(context).width < 520
-              ? MediaQuery.sizeOf(context).width
-              : 410,
-          height: double.infinity,
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(22, 18, 14, 16),
-                child: Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        'Account Details',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 15,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close_rounded),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(22),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          AvatarCircle(name: vendor.name, size: 56),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  vendor.name,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                                Text(
-                                  'ID: ${vendor.id}',
-                                  style: const TextStyle(fontSize: 10),
-                                ),
-                                const SizedBox(height: 4),
-                                StatusBadge(
-                                  label: enumLabel(vendor.status),
-                                  kind: vendor.status == AccountStatus.active
-                                      ? BadgeKind.success
-                                      : vendor.status == AccountStatus.blocked
-                                          ? BadgeKind.danger
-                                          : BadgeKind.warning,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _metric(
-                              context,
-                              'RECENT ORDERS',
-                              '${vendor.orders}',
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _metric(
-                              context,
-                              'RECENT REVENUE',
-                              _accountRevenue(vendor.transactions),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 25),
-                      const SectionLabel('Contact Information'),
-                      const SizedBox(height: 12),
-                      _contact(context, 'Email Address', vendor.email),
-                      _contact(context, 'Phone Number', vendor.phone),
-                      const SizedBox(height: 17),
-                      const SectionLabel('Account Status'),
-                      const SizedBox(height: 9),
-                      DropdownButtonFormField<AccountStatus>(
-                        initialValue: current,
-                        items: AccountStatus.values
-                            .map(
-                              (value) => DropdownMenuItem(
-                                value: value,
-                                child: Text(enumLabel(value)),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (value) {
-                          if (value != null) {
-                            setState(() => current = value);
-                            ref
-                                .read(appDataProvider.notifier)
-                                .setVendorStatus(vendor.id, value);
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 22),
-                      const SectionLabel('Recent Activity'),
-                      const SizedBox(height: 10),
-                      _activity(
-                        context,
-                        'Renewed Stall Permit #44',
-                        'Today at 11:42 AM',
-                      ),
-                      _activity(
-                        context,
-                        'Processed monthly maintenance fee',
-                        'Yesterday at 4:15 PM',
-                      ),
-                      _activity(context, 'Updated profile', 'Jan 12, 2024'),
-                      const SizedBox(height: 12),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(13),
-                        decoration: BoxDecoration(
-                          color: colors.dangerContainer.withValues(alpha: .55),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Violation History',
-                              style: TextStyle(
-                                color: colors.danger,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            const Text(
-                              'Minor: Stall Encroachment',
-                              style: TextStyle(fontWeight: FontWeight.w800),
-                            ),
-                            const SizedBox(height: 4),
-                            const Text(
-                              'Stall extended beyond 2m limit. Warning issued on Nov 05, 2023.',
-                              style: TextStyle(fontSize: 10),
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'No major violations recorded in the last 24 months.',
-                              style: TextStyle(
-                                fontSize: 9,
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _metric(BuildContext context, String label, String value) => Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: semanticColors(context).infoContainer.withValues(alpha: .45),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              value,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
-            ),
-            Text(label, style: const TextStyle(fontSize: 8)),
-          ],
-        ),
-      );
-  Widget _contact(BuildContext context, String label, String value) => Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label, style: const TextStyle(fontSize: 8.5)),
-                  Text(
-                    value,
-                    style: const TextStyle(
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            IconButton(
-              onPressed: () => copyToClipboard(context, value),
-              icon: const Icon(Icons.copy_rounded, size: 14),
-            ),
-          ],
-        ),
-      );
-  Widget _activity(BuildContext context, String title, String time) => Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: Row(
-          children: [
-            Container(
-              width: 7,
-              height: 7,
-              decoration: BoxDecoration(
-                color: semanticColors(context).success,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 9),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(time, style: const TextStyle(fontSize: 9)),
-              ],
-            ),
-          ],
-        ),
-      );
-}
 
 class _AccountDetailsData {
   const _AccountDetailsData({
@@ -1608,6 +1368,9 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
   late final TextEditingController notes = TextEditingController(
     text: widget.account.administrativeNotes,
   );
+  late final Future<Map<String, dynamic>> history;
+  late final Future<List<AdminProduct>> products;
+  final Set<String> priceWarningsInProgress = {};
   bool saving = false;
   bool unblocking = false;
   bool lifting = false;
@@ -1647,6 +1410,18 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
   void initState() {
     super.initState();
     widget.closeRequests.addListener(_handleCloseRequest);
+    final controller = ref.read(appDataProvider.notifier);
+    history = controller.supabaseEnabled
+        ? ref
+            .read(supabaseAdminServiceProvider)
+            .fetchAccountHistory(widget.account.id)
+        : Future.value(<String, dynamic>{'activity': [], 'violations': []});
+    products = controller.supabaseEnabled &&
+            widget.account.accountType == 'Stall Holder'
+        ? ref
+            .read(supabaseAdminServiceProvider)
+            .fetchVendorProducts(widget.account.id)
+        : Future.value(const <AdminProduct>[]);
   }
 
   void _handleCloseRequest() => requestClose();
@@ -2147,6 +1922,297 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
     }
   }
 
+  Widget _productsSection(BuildContext context) {
+    final colors = semanticColors(context);
+    final liveBackend = ref.read(appDataProvider.notifier).supabaseEnabled;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionTitle('PRODUCT LISTINGS & PRICE AUDIT'),
+        const SizedBox(height: 5),
+        Text(
+          'Compare listed prices with the current applicable DTI/SRP reference before issuing a warning.',
+          style: TextStyle(fontSize: 12, color: colors.mutedText),
+        ),
+        const SizedBox(height: 10),
+        if (!liveBackend)
+          const Text(
+              'Live product listings require the Supabase admin backend.')
+        else
+          FutureBuilder<List<AdminProduct>>(
+            future: products,
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return const Text(
+                    'Could not load this stall holder’s products.');
+              }
+              if (!snapshot.hasData) {
+                return const LinearProgressIndicator();
+              }
+              final items = snapshot.data!;
+              if (items.isEmpty) return const Text('No products listed.');
+              return Column(
+                children: [
+                  for (final product in items)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 7),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colors.cardBackground,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: colors.subtleBorder),
+                      ),
+                      child: Row(
+                        children: [
+                          _productThumbnail(product.imageUrl, size: 46),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  product.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                if (product.category.isNotEmpty)
+                                  Text(
+                                    product.category,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: colors.mutedText,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          SizedBox(
+                            width: 115,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  product.listedPrice == null
+                                      ? 'Price not set'
+                                      : '₱${NumberFormat('#,##0.00').format(product.listedPrice)} / ${product.priceUnit}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                Text(
+                                  '${NumberFormat('0.##').format(product.stockQuantity)} ${product.priceUnit}${product.stockQuantity == 1 ? '' : 's'} · ${product.isInStock && product.stockQuantity > 0 ? 'In stock' : 'Out of stock'}',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: product.isInStock &&
+                                            product.stockQuantity > 0
+                                        ? colors.success
+                                        : colors.danger,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'View product details',
+                            onPressed: () => _showProductDetails(product),
+                            icon: const Icon(Icons.visibility_outlined),
+                          ),
+                          IconButton(
+                            tooltip: 'Send price warning',
+                            onPressed: product.listedPrice == null ||
+                                    priceWarningsInProgress.contains(product.id)
+                                ? null
+                                : () => _sendProductPriceWarning(product),
+                            icon: priceWarningsInProgress.contains(product.id)
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Icon(
+                                    Icons.warning_amber_rounded,
+                                    color: colors.warning,
+                                  ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+      ],
+    );
+  }
+
+  Widget _productThumbnail(String? url, {double size = 160}) => ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: SizedBox.square(
+          dimension: size,
+          child: url == null || url.isEmpty
+              ? const ColoredBox(
+                  color: Color(0xFFE2E8F0),
+                  child: Icon(Icons.inventory_2_outlined),
+                )
+              : Image.network(
+                  url,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) =>
+                      const ColoredBox(
+                    color: Color(0xFFE2E8F0),
+                    child: Icon(Icons.broken_image_outlined),
+                  ),
+                ),
+        ),
+      );
+
+  Future<void> _showProductDetails(AdminProduct product) => showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          contentPadding: EdgeInsets.zero,
+          clipBehavior: Clip.antiAlias,
+          content: SizedBox(
+            width: 430,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _productThumbnail(product.imageUrl, size: 430),
+                  Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          product.name,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        if (product.description.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(product.description),
+                        ],
+                        const Divider(height: 24),
+                        Text(
+                          product.listedPrice == null
+                              ? 'Listed price: not set'
+                              : 'Listed price: ₱${NumberFormat('#,##0.00').format(product.listedPrice)} / ${product.priceUnit}',
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Live stock: ${NumberFormat('0.##').format(product.stockQuantity)} ${product.priceUnit}',
+                        ),
+                        if (product.stallName.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text('Stall: ${product.stallName}'),
+                        ],
+                        if (product.stallLocation.isNotEmpty)
+                          Text('Location: ${product.stallLocation}'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+
+  Future<void> _sendProductPriceWarning(AdminProduct product) async {
+    final price = product.listedPrice;
+    if (price == null) return;
+    final message = TextEditingController(
+      text:
+          'Please review this price against the current applicable DTI/SRP and adjust it if it exceeds the reference price.',
+    );
+    String? warning;
+    try {
+      warning = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Send product price warning'),
+          content: SizedBox(
+            width: 460,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${widget.account.name} · ${product.name}'),
+                const SizedBox(height: 4),
+                Text(
+                  'Current listed price: ₱${NumberFormat('#,##0.00').format(price)} / ${product.priceUnit}',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: message,
+                  minLines: 3,
+                  maxLines: 5,
+                  maxLength: 500,
+                  decoration: const InputDecoration(
+                    labelText: 'Warning notice',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton.icon(
+              onPressed: () {
+                final text = message.text.trim();
+                if (text.isNotEmpty) Navigator.pop(dialogContext, text);
+              },
+              icon: const Icon(Icons.send_rounded, size: 16),
+              label: const Text('Send Warning'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      message.dispose();
+    }
+    if (warning == null || !mounted) return;
+    setState(() => priceWarningsInProgress.add(product.id));
+    try {
+      await ref.read(supabaseAdminServiceProvider).sendProductPriceWarning(
+            productId: product.id,
+            message: warning,
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('Price warning sent to ${widget.account.name}.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not send product warning: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => priceWarningsInProgress.remove(product.id));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = semanticColors(context);
@@ -2311,16 +2377,59 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
                           context, 'Email Address', widget.account.email),
                       _contactRow(
                           context, 'Phone Number', widget.account.phone),
+                      if (widget.account.accountType == 'Stall Holder') ...[
+                        const SizedBox(height: 20),
+                        _productsSection(context),
+                      ],
                       const SizedBox(height: 20),
-                      _sectionTitle('RECENT ACTIVITY'),
-                      const SizedBox(height: 10),
-                      _activity(context, 'Renewed Stall Permit #44',
-                          'Today at 11:42 AM'),
-                      _activity(context, 'Processed monthly maintenance fee',
-                          'Yesterday at 4:15 PM'),
-                      _activity(context, 'Updated profile', 'Jan 12, 2024'),
-                      const SizedBox(height: 11),
-                      _violationCard(context),
+                      FutureBuilder<Map<String, dynamic>>(
+                        future: history,
+                        builder: (context, snapshot) {
+                          if (snapshot.hasError) {
+                            return const Text(
+                                'Could not load account history. Close and reopen to retry.');
+                          }
+                          if (!snapshot.hasData) {
+                            return const LinearProgressIndicator();
+                          }
+                          final activity =
+                              snapshot.data!['activity'] as List? ?? [];
+                          final violations =
+                              snapshot.data!['violations'] as List? ?? [];
+                          String when(dynamic item) {
+                            final date =
+                                DateTime.tryParse(item['at']?.toString() ?? '');
+                            return date == null
+                                ? ''
+                                : DateFormat('MMM d, yyyy, h:mm a')
+                                    .format(date.toLocal());
+                          }
+
+                          return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _sectionTitle('RECENT ACTIVITY'),
+                                const SizedBox(height: 10),
+                                if (activity.isEmpty)
+                                  const Text('No recent activity recorded.'),
+                                for (final item in activity)
+                                  _activity(context, item['title'].toString(),
+                                      when(item)),
+                                const SizedBox(height: 16),
+                                _sectionTitle('VIOLATION HISTORY'),
+                                const SizedBox(height: 10),
+                                if (violations.isEmpty)
+                                  const Text(
+                                      'No recorded warnings, suspensions, or blocks.'),
+                                for (final item in violations) ...[
+                                  _activity(context, item['title'].toString(),
+                                      when(item)),
+                                  Text((item['detail'] ?? '').toString()),
+                                  const SizedBox(height: 8),
+                                ],
+                              ]);
+                        },
+                      ),
                       const SizedBox(height: 20),
                       _sectionTitle('ADMINISTRATIVE NOTES'),
                       const SizedBox(height: 9),
@@ -2332,6 +2441,8 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
                         onChanged: (_) => setState(() {}),
                         decoration: const InputDecoration(
                           hintText: 'Add notes about this account...',
+                          helperText:
+                              'Private to administrators. Not sent to the account holder.',
                           alignLabelWithHint: true,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.all(Radius.circular(10)),
@@ -2983,50 +3094,6 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
           ],
         ),
       );
-
-  Widget _violationCard(BuildContext context) {
-    final colors = semanticColors(context);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colors.dangerContainer.withValues(alpha: .55),
-        borderRadius: BorderRadius.circular(11),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Violation History',
-            style: GoogleFonts.inter(
-              color: colors.danger,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 9),
-          Text(
-            'Minor: Stall Encroachment',
-            style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Stall extended beyond the 2m limit. Warning issued on Nov 05, 2023.',
-            style: GoogleFonts.inter(fontSize: 10),
-          ),
-          const SizedBox(height: 7),
-          Text(
-            'No major violations recorded in the last 24 months.',
-            style: GoogleFonts.inter(
-              fontSize: 9,
-              color: colors.mutedText,
-              fontStyle: FontStyle.italic,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _footer(BuildContext context) {
     final colors = semanticColors(context);
