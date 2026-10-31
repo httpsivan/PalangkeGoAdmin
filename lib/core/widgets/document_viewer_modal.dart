@@ -1435,7 +1435,7 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
             style: TextStyle(color: Colors.black87, fontSize: 13)),
         const SizedBox(height: 20),
         const Text(
-          'KIRREN MICHAEL FRAGINAL — Proponent, 4th Year BSIT\n'
+          'PROJECT PROPONENT — Proponent, 4th Year BSIT\n'
           'IVAN NAVARRO — Proponent, 4th Year BSIT\n'
           'AERIANEL SCHYLLE L. PALMERO — Proponent, 4th Year BSIT\n'
           'AKISHA MEKEL SAN MIGUEL — Proponent, 4th Year BSIT',

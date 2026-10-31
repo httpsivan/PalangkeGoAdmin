@@ -36,12 +36,15 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
   String _search = '';
   ChatConversation? _selectedConversation;
   String? _lastScrolledConversationId;
-  int _lastScrolledMessageCount = 0;
+  String? _lastMessageId;
 
   String? _selectedImageDataUri;
   Uint8List? _selectedImageBytes;
   String? _selectedImageName;
   bool _isPickingImage = false;
+  bool _sending = false;
+  bool _loadingOlder = false;
+  bool _reading = false;
 
   @override
   void initState() {
@@ -75,8 +78,10 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
         _scrollController.jumpTo(maxScroll);
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (_scrollController.hasClients &&
-              _scrollController.offset < _scrollController.position.maxScrollExtent) {
-            _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+              _scrollController.offset <
+                  _scrollController.position.maxScrollExtent) {
+            _scrollController
+                .jumpTo(_scrollController.position.maxScrollExtent);
           }
         });
       }
@@ -84,15 +89,25 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
   }
 
   void _selectConversation(ChatConversation conv) {
+    if (_sending) return;
+    _messageController.clear();
     setState(() {
       _selectedConversation = conv;
       _lastScrolledConversationId = null;
-      _lastScrolledMessageCount = 0;
+      _lastMessageId = null;
       _selectedImageDataUri = null;
       _selectedImageBytes = null;
       _selectedImageName = null;
     });
-    ref.read(adminMessagingRepositoryProvider).markAsRead(conv.id);
+    ref
+        .read(adminMessagingRepositoryProvider)
+        .markAsRead(conv.id)
+        .catchError((Object error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not mark messages as read: $error')));
+      }
+    });
   }
 
   Future<void> _pickImage() async {
@@ -106,6 +121,13 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
       if (result != null && result.files.isNotEmpty && mounted) {
         final file = result.files.first;
         final bytes = file.bytes;
+        if (bytes != null && bytes.length > 2 * 1024 * 1024) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Photos must be at most 2 MB.')));
+          }
+          return;
+        }
         if (bytes != null && bytes.isNotEmpty) {
           final ext = (file.extension ?? 'jpeg').toLowerCase();
           final mime = ext == 'png'
@@ -140,28 +162,79 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
     });
   }
 
+  Future<void> _loadOlder() async {
+    final id = _selectedConversation?.id;
+    if (id == null || _loadingOlder) return;
+    setState(() => _loadingOlder = true);
+    final extent = _scrollController.hasClients
+        ? _scrollController.position.maxScrollExtent
+        : 0.0;
+    final offset =
+        _scrollController.hasClients ? _scrollController.offset : 0.0;
+    try {
+      await ref.read(adminMessagingRepositoryProvider).loadOlder(id);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) {
+          _scrollController.jumpTo(
+              offset + _scrollController.position.maxScrollExtent - extent);
+        }
+      });
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not load older messages: $error')));
+      }
+    } finally {
+      if (mounted) setState(() => _loadingOlder = false);
+    }
+  }
+
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
     final attachment = _selectedImageDataUri;
-    if ((text.isEmpty && (attachment == null || attachment.isEmpty)) ||
+    if (_sending ||
+        (text.isEmpty && attachment == null) ||
         _selectedConversation == null) {
       return;
     }
-    final convId = _selectedConversation!.id;
-    _messageController.clear();
-    _clearSelectedImage();
-
-    await ref.read(adminMessagingRepositoryProvider).sendMessage(
-          conversationId: convId,
-          text: text,
-          senderRole: 'admin',
-          senderName: 'PalengkeGo Admin',
-          attachmentUrl: attachment,
-          attachmentType: attachment != null ? 'image' : null,
-        );
-
-    _scrollToBottom(animated: true);
+    final id = _selectedConversation!.id;
+    setState(() => _sending = true);
+    try {
+      await ref.read(adminMessagingRepositoryProvider).sendMessage(
+          conversationId: id, text: text, attachmentUrl: attachment);
+      if (!mounted) return;
+      if (_selectedConversation?.id == id) {
+        _messageController.clear();
+        _clearSelectedImage();
+        _scrollToBottom(animated: true);
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Message not sent. $error')));
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
   }
+
+  Widget _retry(Object error, {String? conversationId}) => Center(
+      child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text('Could not load messages: $error',
+                textAlign: TextAlign.center),
+            TextButton(
+                onPressed: () {
+                  if (conversationId == null) {
+                    ref.invalidate(adminConversationsProvider);
+                  } else {
+                    ref.invalidate(
+                        adminConversationMessagesProvider(conversationId));
+                  }
+                },
+                child: const Text('Retry')),
+          ])));
 
   @override
   Widget build(BuildContext context) {
@@ -184,9 +257,7 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
                 loading: () => Center(
                   child: CircularProgressIndicator(color: colors.accent),
                 ),
-                error: (err, _) => Center(
-                  child: Text('Error loading conversations: $err', style: TextStyle(color: colors.danger)),
-                ),
+                error: (err, _) => _retry(err),
                 data: (allConversations) {
                   // Handle initial conversation ID if passed via query param
                   if (_selectedConversation == null &&
@@ -206,9 +277,12 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
 
                   if (isMobile) {
                     if (_selectedConversation != null) {
-                      return _buildChatPane(context, colors, _selectedConversation!, showBackButton: true);
+                      return _buildChatPane(
+                          context, colors, _selectedConversation!,
+                          showBackButton: true);
                     }
-                    return _buildConversationsListPane(context, colors, filtered);
+                    return _buildConversationsListPane(
+                        context, colors, filtered);
                   }
 
                   // Desktop two-pane split view
@@ -225,14 +299,17 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
                         // Left Pane: Conversation list
                         SizedBox(
                           width: 380,
-                          child: _buildConversationsListPane(context, colors, filtered),
+                          child: _buildConversationsListPane(
+                              context, colors, filtered),
                         ),
-                        VerticalDivider(width: 1, thickness: 1, color: colors.subtleBorder),
+                        VerticalDivider(
+                            width: 1, thickness: 1, color: colors.subtleBorder),
 
                         // Right Pane: Active Chat
                         Expanded(
                           child: _selectedConversation != null
-                              ? _buildChatPane(context, colors, _selectedConversation!)
+                              ? _buildChatPane(
+                                  context, colors, _selectedConversation!)
                               : _buildNoConversationSelected(context, colors),
                         ),
                       ],
@@ -259,7 +336,8 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
               color: Colors.white.withValues(alpha: .15),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.forum_outlined, color: Colors.white, size: 24),
+            child:
+                const Icon(Icons.forum_outlined, color: Colors.white, size: 24),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -326,7 +404,8 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
             decoration: InputDecoration(
               hintText: 'Search conversations...',
               hintStyle: TextStyle(fontSize: 12, color: colors.mutedText),
-              prefixIcon: Icon(Icons.search_rounded, size: 18, color: colors.mutedText),
+              prefixIcon:
+                  Icon(Icons.search_rounded, size: 18, color: colors.mutedText),
               contentPadding: const EdgeInsets.symmetric(vertical: 10),
               filled: true,
               fillColor: colors.inputSurface,
@@ -360,6 +439,24 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
           ),
         ),
         Divider(height: 1, color: colors.subtleBorder),
+        if (ref.watch(adminConversationsProvider).hasValue &&
+            ref
+                .read(adminMessagingRepositoryProvider)
+                .hasOlder('conversations'))
+          TextButton(
+              onPressed: () async {
+                try {
+                  await ref
+                      .read(adminMessagingRepositoryProvider)
+                      .loadOlder('conversations');
+                } catch (error) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text('Could not load conversations: $error')));
+                  }
+                }
+              },
+              child: const Text('Load more conversations')),
 
         // List
         Expanded(
@@ -367,21 +464,28 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
               ? Center(
                   child: Padding(
                     padding: const EdgeInsets.all(24),
-                    child: Text('No matching conversations', style: TextStyle(color: colors.mutedText, fontSize: 13)),
+                    child: Text('No matching conversations',
+                        style:
+                            TextStyle(color: colors.mutedText, fontSize: 13)),
                   ),
                 )
               : ListView.separated(
                   itemCount: filtered.length,
-                  separatorBuilder: (_, __) =>
-                      Divider(height: 1, indent: 64, color: colors.subtleBorder.withValues(alpha: .5)),
+                  separatorBuilder: (_, __) => Divider(
+                      height: 1,
+                      indent: 64,
+                      color: colors.subtleBorder.withValues(alpha: .5)),
                   itemBuilder: (context, index) {
                     final conv = filtered[index];
                     final isSelected = _selectedConversation?.id == conv.id;
                     return InkWell(
                       onTap: () => _selectConversation(conv),
                       child: Container(
-                        color: isSelected ? colors.accent.withValues(alpha: .08) : null,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        color: isSelected
+                            ? colors.accent.withValues(alpha: .08)
+                            : null,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -400,17 +504,24 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
                                             fontSize: 13,
-                                            fontWeight: conv.hasUnreadForAdmin ? FontWeight.w800 : FontWeight.w600,
+                                            fontWeight: conv.hasUnreadForAdmin
+                                                ? FontWeight.w800
+                                                : FontWeight.w600,
                                             color: colors.primaryText,
                                           ),
                                         ),
                                       ),
                                       Text(
-                                        DateFormat('h:mm a').format(conv.lastMessageTimestamp),
+                                        DateFormat('h:mm a')
+                                            .format(conv.lastMessageTimestamp),
                                         style: TextStyle(
                                           fontSize: 10.5,
-                                          color: conv.hasUnreadForAdmin ? colors.accent : colors.mutedText,
-                                          fontWeight: conv.hasUnreadForAdmin ? FontWeight.w700 : FontWeight.w400,
+                                          color: conv.hasUnreadForAdmin
+                                              ? colors.accent
+                                              : colors.mutedText,
+                                          fontWeight: conv.hasUnreadForAdmin
+                                              ? FontWeight.w700
+                                              : FontWeight.w400,
                                         ),
                                       ),
                                     ],
@@ -418,7 +529,9 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
                                   const SizedBox(height: 2),
                                   Text(
                                     '🏪 Stall: ${conv.stallId}',
-                                    style: TextStyle(fontSize: 11, color: colors.secondaryText),
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        color: colors.secondaryText),
                                   ),
                                   const SizedBox(height: 3),
                                   Row(
@@ -430,8 +543,12 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
                                             fontSize: 11.5,
-                                            color: conv.hasUnreadForAdmin ? colors.primaryText : colors.mutedText,
-                                            fontWeight: conv.hasUnreadForAdmin ? FontWeight.w600 : FontWeight.w400,
+                                            color: conv.hasUnreadForAdmin
+                                                ? colors.primaryText
+                                                : colors.mutedText,
+                                            fontWeight: conv.hasUnreadForAdmin
+                                                ? FontWeight.w600
+                                                : FontWeight.w400,
                                           ),
                                         ),
                                       ),
@@ -439,7 +556,8 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
                                         Container(
                                           width: 8,
                                           height: 8,
-                                          margin: const EdgeInsets.only(left: 6),
+                                          margin:
+                                              const EdgeInsets.only(left: 6),
                                           decoration: BoxDecoration(
                                             color: colors.success,
                                             shape: BoxShape.circle,
@@ -469,9 +587,12 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
         decoration: BoxDecoration(
-          color: selected ? colors.accent.withValues(alpha: .12) : colors.inputSurface,
+          color: selected
+              ? colors.accent.withValues(alpha: .12)
+              : colors.inputSurface,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: selected ? colors.accent : colors.subtleBorder),
+          border:
+              Border.all(color: selected ? colors.accent : colors.subtleBorder),
         ),
         child: Text(
           label,
@@ -510,7 +631,7 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
                   onPressed: () => setState(() {
                     _selectedConversation = null;
                     _lastScrolledConversationId = null;
-                    _lastScrolledMessageCount = 0;
+                    _lastMessageId = null;
                   }),
                 ),
                 const SizedBox(width: 8),
@@ -537,16 +658,21 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
                   ],
                 ),
               ),
-              if (conv.relatedOrderId != null && conv.relatedOrderId!.isNotEmpty)
+              if (conv.relatedOrderId != null &&
+                  conv.relatedOrderId!.isNotEmpty)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: colors.accent.withValues(alpha: .12),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
                     'Order #${conv.relatedOrderId}',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: colors.accent),
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: colors.accent),
                   ),
                 ),
             ],
@@ -559,22 +685,45 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
             loading: () => Center(
               child: CircularProgressIndicator(color: colors.accent),
             ),
-            error: (err, _) => Center(
-              child: Text('Error: $err', style: TextStyle(color: colors.danger)),
-            ),
+            error: (err, _) => _retry(err, conversationId: conv.id),
             data: (messages) {
+              if (!_reading &&
+                  messages.any(
+                      (message) => !message.isFromAdmin && !message.isRead)) {
+                _reading = true;
+                WidgetsBinding.instance.addPostFrameCallback((_) async {
+                  try {
+                    if (mounted) {
+                      await ref
+                          .read(adminMessagingRepositoryProvider)
+                          .markAsRead(conv.id);
+                    }
+                  } catch (error) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text('Could not mark read: $error')));
+                    }
+                  } finally {
+                    _reading = false;
+                  }
+                });
+              }
+
               if (messages.isEmpty) {
                 return Center(
-                  child: Text('No messages yet in this conversation.', style: TextStyle(color: colors.mutedText)),
+                  child: Text('No messages yet in this conversation.',
+                      style: TextStyle(color: colors.mutedText)),
                 );
               }
 
               if (_lastScrolledConversationId != conv.id) {
                 _lastScrolledConversationId = conv.id;
-                _lastScrolledMessageCount = messages.length;
+                _lastMessageId = messages.isEmpty ? null : messages.last.id;
                 _scrollToBottom(animated: false);
-              } else if (_lastScrolledMessageCount != messages.length) {
-                _lastScrolledMessageCount = messages.length;
+              } else if (!_loadingOlder &&
+                  messages.isNotEmpty &&
+                  _lastMessageId != messages.last.id) {
+                _lastMessageId = messages.isEmpty ? null : messages.last.id;
                 _scrollToBottom(animated: true);
               }
 
@@ -583,15 +732,31 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
 
               return ListView.builder(
                 controller: _scrollController,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                itemCount: sortedMessages.length,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                itemCount: sortedMessages.length + 1,
                 itemBuilder: (context, index) {
+                  if (index == 0) {
+                    return ref
+                            .read(adminMessagingRepositoryProvider)
+                            .hasOlder(conv.id)
+                        ? TextButton(
+                            onPressed: _loadingOlder ? null : _loadOlder,
+                            child: Text(_loadingOlder
+                                ? 'Loading...'
+                                : 'Load older messages'))
+                        : const SizedBox.shrink();
+                  }
+                  index -= 1;
                   final msg = sortedMessages[index];
                   final prevMsg = index > 0 ? sortedMessages[index - 1] : null;
                   final isNewDay = prevMsg == null ||
-                      msg.timestamp.toLocal().year != prevMsg.timestamp.toLocal().year ||
-                      msg.timestamp.toLocal().month != prevMsg.timestamp.toLocal().month ||
-                      msg.timestamp.toLocal().day != prevMsg.timestamp.toLocal().day;
+                      msg.timestamp.toLocal().year !=
+                          prevMsg.timestamp.toLocal().year ||
+                      msg.timestamp.toLocal().month !=
+                          prevMsg.timestamp.toLocal().month ||
+                      msg.timestamp.toLocal().day !=
+                          prevMsg.timestamp.toLocal().day;
 
                   final isRight = msg.isFromAdmin;
 
@@ -714,8 +879,10 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
                         hintText: _selectedImageBytes != null
                             ? 'Add a caption or press send...'
                             : 'Type response as PalengkeGo Market Admin...',
-                        hintStyle: TextStyle(fontSize: 12.5, color: colors.mutedText),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        hintStyle:
+                            TextStyle(fontSize: 12.5, color: colors.mutedText),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
                         filled: true,
                         fillColor: colors.inputSurface,
                         border: OutlineInputBorder(
@@ -728,7 +895,8 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
-                          borderSide: BorderSide(color: colors.accent, width: 1.2),
+                          borderSide:
+                              BorderSide(color: colors.accent, width: 1.2),
                         ),
                       ),
                     ),
@@ -739,11 +907,12 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
                     shape: const CircleBorder(),
                     child: InkWell(
                       customBorder: const CircleBorder(),
-                      onTap: _sendMessage,
+                      onTap: _sending ? null : _sendMessage,
                       child: const SizedBox(
                         width: 44,
                         height: 44,
-                        child: Icon(Icons.send_rounded, size: 20, color: Colors.white),
+                        child: Icon(Icons.send_rounded,
+                            size: 20, color: Colors.white),
                       ),
                     ),
                   ),
@@ -756,12 +925,14 @@ class _MessagesPageState extends ConsumerState<MessagesPage> {
     );
   }
 
-  Widget _buildNoConversationSelected(BuildContext context, AppSemanticColors colors) {
+  Widget _buildNoConversationSelected(
+      BuildContext context, AppSemanticColors colors) {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.forum_outlined, size: 54, color: colors.mutedText.withValues(alpha: .5)),
+          Icon(Icons.forum_outlined,
+              size: 54, color: colors.mutedText.withValues(alpha: .5)),
           const SizedBox(height: 14),
           Text(
             'Select a conversation',
@@ -793,7 +964,9 @@ class _DateDivider extends StatelessWidget {
       return 'Today • ${DateFormat('MMMM d, yyyy').format(dt)}';
     }
     final yesterday = now.subtract(const Duration(days: 1));
-    if (dt.year == yesterday.year && dt.month == yesterday.month && dt.day == yesterday.day) {
+    if (dt.year == yesterday.year &&
+        dt.month == yesterday.month &&
+        dt.day == yesterday.day) {
       return 'Yesterday • ${DateFormat('MMMM d, yyyy').format(dt)}';
     }
     return DateFormat('EEEE, MMMM d, yyyy').format(dt);
@@ -977,12 +1150,12 @@ class _FullChatBubble extends StatelessWidget {
 
     // Display the vendor's store/sender name directly without a "Stall Holder (...)" wrapper
     final senderName = message.senderName.trim();
-    final vendorLabel = (senderName.isNotEmpty &&
-            senderName.toLowerCase() != 'stall holder')
-        ? senderName
-        : (fallbackVendorName?.trim().isNotEmpty == true
-            ? fallbackVendorName!.trim()
-            : 'Stall Holder');
+    final vendorLabel =
+        (senderName.isNotEmpty && senderName.toLowerCase() != 'stall holder')
+            ? senderName
+            : (fallbackVendorName?.trim().isNotEmpty == true
+                ? fallbackVendorName!.trim()
+                : 'Stall Holder');
     final roleLabel = isAdmin
         ? 'PalengkeGo Market Admin'
         : (isVendor ? vendorLabel : senderName);
@@ -1050,12 +1223,16 @@ class _FullChatBubble extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 9.5,
                       fontWeight: FontWeight.w500,
-                      color: isAdmin ? Colors.white.withValues(alpha: .8) : colors.mutedText,
+                      color: isAdmin
+                          ? Colors.white.withValues(alpha: .8)
+                          : colors.mutedText,
                     ),
                   ),
                   const SizedBox(width: 5),
                   Icon(
-                    message.isRead ? Icons.done_all_rounded : Icons.done_rounded,
+                    message.isRead
+                        ? Icons.done_all_rounded
+                        : Icons.done_rounded,
                     size: 13,
                     color: message.isRead ? Colors.white : Colors.white70,
                   ),
@@ -1085,7 +1262,13 @@ class _AvatarCircle extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = semanticColors(context);
     final initials = name.trim().isNotEmpty
-        ? name.trim().split(RegExp(r'\s+')).take(2).map((e) => e.isNotEmpty ? e[0] : '').join().toUpperCase()
+        ? name
+            .trim()
+            .split(RegExp(r'\s+'))
+            .take(2)
+            .map((e) => e.isNotEmpty ? e[0] : '')
+            .join()
+            .toUpperCase()
         : '?';
 
     return Container(

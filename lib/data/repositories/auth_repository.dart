@@ -11,7 +11,7 @@ import '../../models/admin_models.dart';
 import 'firebase_admin_service.dart';
 import 'supabase_admin_service.dart';
 
-const defaultAdminName = 'Kirren Michael Fraginal';
+const defaultAdminName = 'Market Administrator';
 const defaultAdminEmail = 'admin@palengkego.gov.ph';
 const defaultAdminPassword = 'Admin123!';
 
@@ -70,7 +70,9 @@ class AdminProfileController extends StateNotifier<AdminProfile> {
   AdminProfileController(this._preferences, this._supabase)
       : super(
           AdminProfile(
-            name: _preferences.getString('admin_name') ?? defaultAdminName,
+            name: _supabase.isConfigured
+                ? 'Market Administrator'
+                : _preferences.getString('admin_name') ?? defaultAdminName,
             email: defaultAdminEmail,
             password: _preferences.getString('admin_password') ??
                 defaultAdminPassword,

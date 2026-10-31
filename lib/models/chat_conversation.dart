@@ -72,15 +72,15 @@ class ChatConversation {
   });
 
   /// True if there are unread messages requiring admin attention.
-  bool get hasUnreadForAdmin =>
-      adminUnreadCount > 0 || customerUnreadCount > 0 || vendorUnreadCount > 0;
+  bool get hasUnreadForAdmin => adminUnreadCount > 0;
 
   /// Returns the formatted stall name with category tag formatted in Title Case.
   /// E.g., "Mer's Mayao Fruit Stand" -> "Mer's Mayao (Fruit)".
   String get displayStallName {
     var name = stallName;
     if (!name.contains('(') && name.toLowerCase().contains('fruit')) {
-      name = '${name.replaceAll(RegExp(r'\s+fruit\s+stand', caseSensitive: false), '')} (Fruit)';
+      name =
+          '${name.replaceAll(RegExp(r'\s+fruit\s+stand', caseSensitive: false), '')} (Fruit)';
     }
     return name.replaceAllMapped(RegExp(r'\(([^)]+)\)'), (m) {
       final inner = m.group(1) ?? '';
@@ -164,23 +164,45 @@ class ChatConversation {
     return ChatConversation(
       id: (json['id'] ?? json['conversation_id'] ?? '').toString(),
       stallId: (json['stall_id'] ?? json['stallId'] ?? '').toString(),
-      stallName: (json['stall_name'] ?? json['stallName'] ?? 'Stall Holder').toString(),
+      stallName: (json['stall_name'] ?? json['stallName'] ?? 'Stall Holder')
+          .toString(),
       stallAvatar: (json['stall_avatar'] ?? json['stallAvatar']) as String?,
-      customerUid: (json['customer_uid'] ?? json['customerUid'] ?? '').toString(),
-      customerName: (json['customer_name'] ?? json['customerName'] ?? 'Customer').toString(),
-      customerAvatar: (json['customer_avatar'] ?? json['customerAvatar']) as String?,
-      lastMessageText: (json['last_message_text'] ?? json['lastMessageText'] ?? '').toString(),
-      lastMessageTimestamp: json['last_message_timestamp'] != null || json['lastMessageTimestamp'] != null
-          ? parseLocal(json['last_message_timestamp'] ?? json['lastMessageTimestamp'])
+      customerUid:
+          (json['customer_uid'] ?? json['customerUid'] ?? '').toString(),
+      customerName:
+          (json['customer_name'] ?? json['customerName'] ?? 'Customer')
+              .toString(),
+      customerAvatar:
+          (json['customer_avatar'] ?? json['customerAvatar']) as String?,
+      lastMessageText:
+          (json['last_message_text'] ?? json['lastMessageText'] ?? '')
+              .toString(),
+      lastMessageTimestamp: json['last_message_timestamp'] != null ||
+              json['lastMessageTimestamp'] != null
+          ? parseLocal(
+              json['last_message_timestamp'] ?? json['lastMessageTimestamp'])
           : (json['updated_at'] != null
               ? parseLocal(json['updated_at'])
               : DateTime.now()),
-      lastMessageSenderId: (json['last_message_sender_id'] ?? json['lastMessageSenderId'] ?? '').toString(),
-      customerUnreadCount: (json['customer_unread_count'] ?? json['customerUnreadCount'] as num?)?.toInt() ?? 0,
-      vendorUnreadCount: (json['vendor_unread_count'] ?? json['vendorUnreadCount'] as num?)?.toInt() ?? 0,
-      adminUnreadCount: (json['admin_unread_count'] ?? json['adminUnreadCount'] as num?)?.toInt() ?? 0,
-      inquiryType: (json['inquiry_type'] ?? json['inquiryType'] ?? 'general').toString(),
-      relatedOrderId: (json['related_order_id'] ?? json['relatedOrderId']) as String?,
+      lastMessageSenderId:
+          (json['last_message_sender_id'] ?? json['lastMessageSenderId'] ?? '')
+              .toString(),
+      customerUnreadCount:
+          (json['customer_unread_count'] ?? json['customerUnreadCount'] as num?)
+                  ?.toInt() ??
+              0,
+      vendorUnreadCount:
+          (json['vendor_unread_count'] ?? json['vendorUnreadCount'] as num?)
+                  ?.toInt() ??
+              0,
+      adminUnreadCount:
+          (json['admin_unread_count'] ?? json['adminUnreadCount'] as num?)
+                  ?.toInt() ??
+              0,
+      inquiryType:
+          (json['inquiry_type'] ?? json['inquiryType'] ?? 'general').toString(),
+      relatedOrderId:
+          (json['related_order_id'] ?? json['relatedOrderId']) as String?,
       createdAt: json['created_at'] != null || json['createdAt'] != null
           ? parseLocal(json['created_at'] ?? json['createdAt'])
           : DateTime.now(),

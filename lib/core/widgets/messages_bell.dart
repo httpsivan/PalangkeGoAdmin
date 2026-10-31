@@ -50,7 +50,8 @@ class _MessagesBellState extends ConsumerState<MessagesBell> {
           child: Stack(
             children: [
               Positioned(
-                top: anchor.dy + renderObject.size.height + 10,
+                top: (anchor.dy + renderObject.size.height + 10)
+                    .clamp(12.0, screen.height - height - 12),
                 right: right,
                 child: SizedBox(
                   width: width,
@@ -122,7 +123,8 @@ class _MessagesBellState extends ConsumerState<MessagesBell> {
                     return FadeTransition(
                       opacity: curved,
                       child: ScaleTransition(
-                        scale: Tween<double>(begin: .86, end: 1).animate(curved),
+                        scale:
+                            Tween<double>(begin: .86, end: 1).animate(curved),
                         child: child,
                       ),
                     );
@@ -149,8 +151,10 @@ class _MessagesBellState extends ConsumerState<MessagesBell> {
                 ),
                 child: Container(
                   key: ValueKey('badge-$unread'),
-                  constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  constraints:
+                      const BoxConstraints(minWidth: 16, minHeight: 16),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                   decoration: BoxDecoration(
                     color: colors.danger,
                     borderRadius: BorderRadius.circular(999),

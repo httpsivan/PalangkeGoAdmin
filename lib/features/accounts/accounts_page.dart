@@ -660,8 +660,8 @@ class _VendorTable extends StatelessWidget {
               ),
               DataCell(Text(vendor.stallType)),
               DataCell(Text(shortDate.format(vendor.registeredAt))),
-              DataCell(
-                vendor.closureRequestedAt != null
+              DataCell(Center(
+                child: vendor.closureRequestedAt != null
                     ? const StatusBadge(
                         label: 'Closure Requested',
                         kind: BadgeKind.warning,
@@ -692,33 +692,21 @@ class _VendorTable extends StatelessWidget {
                                         ? BadgeKind.danger
                                         : BadgeKind.warning,
                               ),
-              ),
+              )),
               DataCell(
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
-                      onPressed: () => showStallProductsDialog(context, vendor: vendor),
+                      onPressed: () =>
+                          showStallProductsDialog(context, vendor: vendor),
                       icon: const Icon(Icons.inventory_2_outlined, size: 16),
                       tooltip: 'View Stall Products & Inventory',
                     ),
-                OutlinedButton(
-                  onPressed: () => onOpen(vendor),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF0D5C4B),
-                    backgroundColor: const Color(0xFFE8F5F1),
-                    side: const BorderSide(color: Color(0xFFB7DCD1)),
-                    minimumSize: const Size(62, 32),
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    visualDensity: VisualDensity.compact,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(7),
-                    ),
-                  ),
-                  child: const Text(
-                    'View',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
+                    IconButton(
+                      onPressed: () => onOpen(vendor),
+                      icon: const Icon(Icons.visibility_outlined, size: 20),
+                      tooltip: 'View account details',
                     ),
                   ],
                 ),
@@ -742,6 +730,7 @@ class _VendorTable extends StatelessWidget {
       ),
       DataColumn(
         columnWidth: FlexColumnWidth(1.35),
+        headingRowAlignment: MainAxisAlignment.center,
         label: Text('ACCOUNT STATUS'),
       ),
       DataColumn(
@@ -811,19 +800,18 @@ class _CustomerTable extends StatelessWidget {
                 ),
               ),
               DataCell(
-                StatusBadge(
+                Center(
+                    child: StatusBadge(
                   label: enumLabel(customer.status),
                   kind: customer.status == AccountStatus.active
                       ? BadgeKind.success
                       : BadgeKind.danger,
-                ),
+                )),
               ),
               DataCell(
                 IconButton(
                   onPressed: () => onOpen(customer),
-                  icon: const Icon(Icons.open_in_new_rounded, size: 15),
-
-
+                  icon: const Icon(Icons.visibility_outlined, size: 20),
                   tooltip: 'Open account details',
                 ),
               ),
@@ -850,6 +838,7 @@ class _CustomerTable extends StatelessWidget {
         ),
         DataColumn(
           columnWidth: FlexColumnWidth(1.35),
+          headingRowAlignment: MainAxisAlignment.center,
           label: Text('ACCOUNT STATUS'),
         ),
         DataColumn(
@@ -2290,9 +2279,14 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
                           width: double.infinity,
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
-                            color: semanticColors(context).infoContainer.withValues(alpha: 0.35),
+                            color: semanticColors(context)
+                                .infoContainer
+                                .withValues(alpha: 0.35),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: semanticColors(context).info.withValues(alpha: 0.3)),
+                            border: Border.all(
+                                color: semanticColors(context)
+                                    .info
+                                    .withValues(alpha: 0.3)),
                           ),
                           child: Row(
                             children: [
@@ -2303,7 +2297,8 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
                                   color: const Color(0xFF0F4A3C),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
-                                child: const Icon(Icons.inventory_2_outlined, color: Colors.white, size: 20),
+                                child: const Icon(Icons.inventory_2_outlined,
+                                    color: Colors.white, size: 20),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
@@ -2322,7 +2317,8 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
                                       'Inspect listed products and audit pricing for DTI compliance.',
                                       style: TextStyle(
                                         fontSize: 10,
-                                        color: semanticColors(context).mutedText,
+                                        color:
+                                            semanticColors(context).mutedText,
                                       ),
                                     ),
                                   ],
@@ -2333,7 +2329,8 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF0F4A3C),
                                   foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 14, vertical: 10),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(8),
                                   ),
@@ -2349,21 +2346,27 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
                                           name: widget.account.name,
                                           email: widget.account.email,
                                           stallType: widget.account.stallType,
-                                          registeredAt: widget.account.registeredAt,
+                                          registeredAt:
+                                              widget.account.registeredAt,
                                           status: widget.account.status,
                                           location: widget.account.location,
                                           orders: widget.account.orders,
-                                          transactions: widget.account.transactions,
+                                          transactions:
+                                              widget.account.transactions,
                                           phone: widget.account.phone,
                                           residence: widget.account.residence,
                                         ),
                                       );
-                                  showStallProductsDialog(context, vendor: vendor);
+                                  showStallProductsDialog(context,
+                                      vendor: vendor);
                                 },
-                                icon: const Icon(Icons.arrow_forward_rounded, size: 14),
+                                icon: const Icon(Icons.arrow_forward_rounded,
+                                    size: 14),
                                 label: const Text(
                                   'View Catalog',
-                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold),
                                 ),
                               ),
                             ],
@@ -3171,7 +3174,7 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
               child: OutlinedButton.icon(
                 onPressed: busy ? null : _liftSuspension,
                 style: OutlinedButton.styleFrom(
-backgroundColor: warningBg,
+                  backgroundColor: warningBg,
                   foregroundColor: warningFg,
                   side: BorderSide(color: warningBorder, width: 1.2),
                   shape: RoundedRectangleBorder(
@@ -3184,12 +3187,16 @@ backgroundColor: warningBg,
                     ? SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: warningFg),
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: warningFg),
                       )
                     : Icon(Icons.lock_open_rounded, size: 16, color: warningFg),
                 label: Text(
                   lifting ? 'Lifting...' : 'Lift',
-style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: warningFg),
+                  style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                      color: warningFg),
                 ),
               ),
             ),
@@ -3198,7 +3205,7 @@ style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: warningFg),
               child: OutlinedButton.icon(
                 onPressed: busy ? null : _suspend,
                 style: OutlinedButton.styleFrom(
-backgroundColor: warningBg,
+                  backgroundColor: warningBg,
                   foregroundColor: warningFg,
                   side: BorderSide(color: warningBorder, width: 1.2),
                   shape: RoundedRectangleBorder(
@@ -3211,12 +3218,17 @@ backgroundColor: warningBg,
                     ? SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: warningFg),
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: warningFg),
                       )
-                    : Icon(Icons.pause_circle_outline, size: 16, color: warningFg),
+                    : Icon(Icons.pause_circle_outline,
+                        size: 16, color: warningFg),
                 label: Text(
                   suspending ? 'Suspending...' : 'Suspend',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: warningFg),
+                  style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                      color: warningFg),
                 ),
               ),
             ),
@@ -3227,7 +3239,7 @@ backgroundColor: warningBg,
               child: OutlinedButton.icon(
                 onPressed: busy ? null : _block,
                 style: OutlinedButton.styleFrom(
-backgroundColor: dangerBg,
+                  backgroundColor: dangerBg,
                   foregroundColor: dangerFg,
                   side: BorderSide(color: dangerBorder, width: 1.2),
                   shape: RoundedRectangleBorder(
@@ -3240,12 +3252,16 @@ backgroundColor: dangerBg,
                     ? SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: dangerFg),
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: dangerFg),
                       )
                     : Icon(Icons.block_outlined, size: 16, color: dangerFg),
                 label: Text(
                   blocking ? 'Blocking...' : 'Block',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: dangerFg),
+                  style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                      color: dangerFg),
                 ),
               ),
             ),
