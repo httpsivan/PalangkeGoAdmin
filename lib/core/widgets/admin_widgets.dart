@@ -1639,26 +1639,30 @@ class ScrollableDataTable extends StatelessWidget {
                   ),
                 );
 
+            final content = AnimatedSwitcher(
+              duration: AppMotion.duration(context, AppMotion.component),
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: child,
+              ),
+              child: rows.isEmpty
+                  ? KeyedSubtree(
+                      key: const ValueKey('empty'),
+                      child: emptyState,
+                    )
+                  : KeyedSubtree(
+                      key: const ValueKey('rows'),
+                      child: table(tableRows: rows, headingHeight: 48),
+                    ),
+            );
+            if (!horizontalScroll) {
+              return SizedBox(width: tableWidth, child: content);
+            }
             return SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: ConstrainedBox(
                 constraints: BoxConstraints(minWidth: tableWidth),
-                child: AnimatedSwitcher(
-                  duration: AppMotion.duration(context, AppMotion.component),
-                  transitionBuilder: (child, animation) => FadeTransition(
-                    opacity: animation,
-                    child: child,
-                  ),
-                  child: rows.isEmpty
-                      ? KeyedSubtree(
-                          key: const ValueKey('empty'),
-                          child: emptyState,
-                        )
-                      : KeyedSubtree(
-                          key: const ValueKey('rows'),
-                          child: table(tableRows: rows, headingHeight: 48),
-                        ),
-                ),
+                child: content,
               ),
             );
           },
