@@ -249,6 +249,12 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
                   accent: const Color(0xFF10B981),
                 ),
                 MetricCardData(
+                  value: _fmtMoney(summary.pendingPaymentAmount),
+                  label: 'PENDING PAYMENTS (${summary.pendingPaymentOrders})',
+                  icon: Icons.pending_actions_outlined,
+                  accent: const Color(0xFFF59E0B),
+                ),
+                MetricCardData(
                   value: _fmtMoney(summary.refunds),
                   label: 'REFUNDS',
                   icon: Icons.replay_rounded,
@@ -276,8 +282,8 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
-                          child: _buildCategorySalesCard(
-                              colors, filteredOrders, summary.grossSales),
+                          child:
+                              _buildCategorySalesCard(colors, filteredOrders),
                         ),
                         const SizedBox(width: 16),
                         Expanded(
@@ -287,8 +293,7 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
                       ],
                     )
                   else ...[
-                    _buildCategorySalesCard(
-                        colors, filteredOrders, summary.grossSales),
+                    _buildCategorySalesCard(colors, filteredOrders),
                     const SizedBox(height: 16),
                     _buildTopSellersCard(colors, filteredOrders,
                         allOrders: orders),
@@ -422,9 +427,12 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
   // ---------------------------------------------------------------------------
   Widget _buildSalesOverviewCard(AppSemanticColors colors,
       List<Order> filteredOrders, SalesSummary summary, List<Order> allOrders) {
+    final salesOrders = filteredOrders
+        .where((order) => order.contributesToSales)
+        .toList(growable: false);
     // Peak sales day calculation
     final dailyTotals = <DateTime, double>{};
-    for (final o in filteredOrders) {
+    for (final o in salesOrders) {
       final day = DateTime(o.placedAt.year, o.placedAt.month, o.placedAt.day);
       dailyTotals[day] = (dailyTotals[day] ?? 0.0) + o.total;
     }
@@ -441,9 +449,8 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
         : 'N/A';
 
     // Avg Order Value
-    final aovText = _fmtMoney(filteredOrders.isEmpty
-        ? 0
-        : summary.grossSales / filteredOrders.length);
+    final aovText = _fmtMoney(
+        salesOrders.isEmpty ? 0 : summary.grossSales / salesOrders.length);
 
     // % Change vs Previous Period calculation
     final (growthText, growthIsPositive) =
@@ -520,7 +527,7 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
           SizedBox(
             height: 220,
             child: _SalesLineChart(
-              orders: filteredOrders,
+              orders: salesOrders,
               startDate: startDate,
               endDate: endDate,
               isSales: showSalesMetric,
@@ -595,27 +602,24 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
 
   (String, bool) _calculatePeriodGrowth(
       List<Order> allOrders, double currentGross) {
-    if (currentGross <= 0 || allOrders.isEmpty) {
-      return ('0.0%', true);
+    if (startDate == null || endDate == null) return ('N/A', true);
+
+    final duration = endDate!.difference(startDate!);
+    final prevStart = startDate!.subtract(duration + const Duration(days: 1));
+    final prevEnd = startDate!.subtract(const Duration(seconds: 1));
+    final prevGross = allOrders
+        .where((order) =>
+            order.contributesToSales &&
+            !order.placedAt.isBefore(prevStart) &&
+            !order.placedAt.isAfter(prevEnd))
+        .fold<double>(0, (sum, order) => sum + order.total);
+
+    if (prevGross == 0) {
+      return currentGross == 0 ? ('0.0%', true) : ('New', true);
     }
-
-    if (startDate != null && endDate != null) {
-      final duration = endDate!.difference(startDate!);
-      final prevStart = startDate!.subtract(duration + const Duration(days: 1));
-      final prevEnd = startDate!.subtract(const Duration(seconds: 1));
-
-      final prevOrders = allOrders.where((o) =>
-          !o.placedAt.isBefore(prevStart) && !o.placedAt.isAfter(prevEnd));
-      final prevGross = prevOrders.fold<double>(0.0, (sum, o) => sum + o.total);
-
-      if (prevGross > 0) {
-        final pct = ((currentGross - prevGross) / prevGross) * 100;
-        final sign = pct >= 0 ? '+' : '';
-        return ('$sign${pct.toStringAsFixed(1)}%', pct >= 0);
-      }
-    }
-
-    return ('+12.4%', true);
+    final pct = ((currentGross - prevGross) / prevGross) * 100;
+    final sign = pct >= 0 ? '+' : '';
+    return ('$sign${pct.toStringAsFixed(1)}%', pct >= 0);
   }
 
   Widget _summaryStatTile({
@@ -695,8 +699,7 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
   // ---------------------------------------------------------------------------
   // SALES BY CATEGORY
   // ---------------------------------------------------------------------------
-  Widget _buildCategorySalesCard(
-      AppSemanticColors colors, List<Order> orders, double totalGross) {
+  Widget _buildCategorySalesCard(AppSemanticColors colors, List<Order> orders) {
     final predefined = [
       (
         name: 'Fresh Fish',
@@ -719,10 +722,6 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
         style: CategoryColors.fruits,
       ),
       (
-        name: 'Vegetables',
-        style: CategoryColors.vegetables,
-      ),
-      (
         name: 'Maritatas',
         style: CategoryColors.maritatas,
       ),
@@ -732,21 +731,15 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
       ),
     ];
 
-    // Compute sales per category
-    final salesMap = <String, double>{};
-    for (final o in orders) {
-      for (final item in o.items) {
-        final cat = item.category.trim().toLowerCase();
-        salesMap[cat] = (salesMap[cat] ?? 0.0) + item.subtotal;
-      }
-    }
+    // Group product revenue by the stall category where the order was placed.
+    final salesMap = salesByStallCategory(orders);
 
     final computedTotal = salesMap.values.fold<double>(0.0, (a, b) => a + b);
     final totalBaseline = computedTotal > 0 ? computedTotal : 1.0;
 
     // Build sorted category list (descending by revenue/percentage)
     final categoryList = predefined.map((cat) {
-      final sales = salesMap[cat.name.toLowerCase()] ?? 0.0;
+      final sales = salesMap[cat.name] ?? 0.0;
       return (
         name: cat.name,
         style: cat.style,
@@ -776,7 +769,7 @@ class _SalesReportsPageState extends ConsumerState<SalesReportsPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Sales by Category',
+            'Sales by Stall Category',
             style: GoogleFonts.inter(
               fontSize: 15,
               fontWeight: FontWeight.w700,
@@ -2192,7 +2185,6 @@ class _OrderDetailsDialog extends StatelessWidget {
     };
     return StatusBadge(label: label, kind: kind);
   }
-
 }
 
 // =============================================================================

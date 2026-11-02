@@ -156,28 +156,29 @@ class _NotificationBellState extends ConsumerState<NotificationBell> {
                 : Container(
                     key: ValueKey('unread-$unread'),
                     constraints:
-                        const BoxConstraints(minWidth: 8, minHeight: 8),
-                    padding: unread > 9
-                        ? const EdgeInsets.symmetric(horizontal: 3, vertical: 1)
-                        : EdgeInsets.zero,
+                        const BoxConstraints(minWidth: 17, minHeight: 17),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: colors.danger,
-                      shape: BoxShape.circle,
+                      borderRadius: BorderRadius.circular(10),
                       border: Border.all(
                         color: colors.heroBackground,
                         width: 1.5,
                       ),
                     ),
-                    child: unread > 9
-                        ? Text(
-                            unread > 99 ? '99+' : '$unread',
-                            style: TextStyle(
-                              color: colors.heroForeground,
-                              fontSize: 8,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          )
-                        : null,
+                    child: Text(
+                      unread > 99 ? '99+' : '$unread',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: colors.heroForeground,
+                        fontSize: 9,
+                        height: 1,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ),
           ),
         ),

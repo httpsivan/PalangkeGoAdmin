@@ -41,6 +41,10 @@ class SupportChatClient {
   bool _disposed = false;
   int _channelId = 0;
 
+  bool _isDirect(String key) => key.startsWith('direct:');
+  String _rawConversationId(String key) =>
+      _isDirect(key) ? key.substring('direct:'.length) : key;
+
   Future<Map<String, dynamic>> request(
     String action, [
     Map<String, dynamic> data = const {},
@@ -81,6 +85,8 @@ class SupportChatClient {
     required bool older,
   }) async {
     final conversations = key == 'conversations';
+    final direct = !conversations && _isDirect(key);
+    final conversationId = conversations ? null : _rawConversationId(key);
     final previous = _rows[key]?.values.toList() ?? <Map<String, dynamic>>[];
     previous.sort((a, b) {
       final at = a['created_at'].toString().compareTo(
@@ -90,13 +96,21 @@ class SupportChatClient {
     });
     final result =
         await request(conversations ? 'list-conversations' : 'messages', {
-      if (!conversations) 'conversationId': key,
+          if (!conversations) 'conversationId': conversationId,
+          if (direct) 'conversationType': 'direct',
       if (older && _cursors[key] != null) 'before': _cursors[key],
     });
     final cache = _rows.putIfAbsent(key, () => {});
     final items = (result[conversations ? 'conversations' : 'messages'] as List)
         .map((row) => Map<String, dynamic>.from(row as Map))
         .toList();
+    if (conversations) {
+      for (final row in items) {
+        if (row['conversation_type'] == 'direct') {
+          row['id'] = 'direct:${row['id']}';
+        }
+      }
+    }
     if (!conversations && !older && previous.isNotEmpty) {
       Map<String, dynamic>? after = {
         'at': previous.last['created_at'],
@@ -104,7 +118,8 @@ class SupportChatClient {
       };
       while (after != null) {
         final newer = await request('messages', {
-          'conversationId': key,
+          'conversationId': conversationId,
+          if (direct) 'conversationType': 'direct',
           'after': after,
         });
         for (final row in newer['messages'] as List) {
@@ -159,8 +174,13 @@ class SupportChatClient {
 
     final localSub =
         _local.stream.where((event) => event == key).listen((_) => notify());
-    final table =
-        key == 'conversations' ? 'support_conversations' : 'support_messages';
+    final direct = key != 'conversations' && _isDirect(key);
+    final conversationId = key == 'conversations' ? null : _rawConversationId(key);
+    final table = key == 'conversations'
+        ? 'support_conversations'
+        : direct
+            ? 'messages'
+            : 'support_messages';
     final channel = realtime.channel('support-$key-${_channelId++}');
     channel.onPostgresChanges(
       event: PostgresChangeEvent.all,
@@ -171,10 +191,29 @@ class SupportChatClient {
           : PostgresChangeFilter(
               type: PostgresChangeFilterType.eq,
               column: 'conversation_id',
-              value: key,
+          value: conversationId,
             ),
       callback: (_) => notify(),
     );
+    RealtimeChannel? directListChannel;
+    if (key == 'conversations') {
+      final uid = auth.currentUser?.uid;
+      if (uid != null) {
+        directListChannel = realtime.channel('admin-direct-list-${_channelId++}')
+          ..onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'conversations',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'customer_uid',
+              value: uid,
+            ),
+            callback: (_) => notify(),
+          )
+          ..subscribe();
+      }
+    }
     channel.subscribe((status, error) {
       if (status == RealtimeSubscribeStatus.subscribed) notify();
       if (status == RealtimeSubscribeStatus.channelError && !events.isClosed) {
@@ -193,11 +232,16 @@ class SupportChatClient {
       debounce?.cancel();
       await localSub.cancel();
       await realtime.removeChannel(channel);
+      if (directListChannel != null) {
+        await realtime.removeChannel(directListChannel);
+      }
       unawaited(events.close());
     }
   }
 
   Future<String> upload(String id, String dataUri) async {
+    final direct = _isDirect(id);
+    final conversationId = _rawConversationId(id);
     final match = RegExp(
       r'^data:(image/(?:jpeg|png|webp|gif));base64,(.+)$',
       dotAll: true,
@@ -210,10 +254,12 @@ class SupportChatClient {
       throw StateError('Photos must be at most 2 MB.');
     }
     final signed = await request('upload-photo', {
-      'conversationId': id,
+      'conversationId': conversationId,
+      if (direct) 'conversationType': 'direct',
       'mime': match.group(1),
     });
-    await backend.storage.from('support-attachments').uploadBinaryToSignedUrl(
+    final bucket = direct ? 'chat-attachments' : 'support-attachments';
+    await backend.storage.from(bucket).uploadBinaryToSignedUrl(
           signed['path'] as String,
           signed['token'] as String,
           bytes,
@@ -227,8 +273,14 @@ class SupportChatClient {
     String text, {
     String? image,
   }) async {
+    final direct = _isDirect(id);
+    final conversationId = _rawConversationId(id);
     final path = image == null ? null : await upload(id, image);
-    final args = <String, dynamic>{'conversationId': id, 'message': text};
+    final args = <String, dynamic>{
+      'conversationId': conversationId,
+      'message': text,
+      if (direct) 'conversationType': 'direct',
+    };
     if (path != null) args['attachmentPath'] = path;
     final response = await request('send-message', args);
     refresh(id);
@@ -237,7 +289,12 @@ class SupportChatClient {
   }
 
   Future<void> markRead(String id) async {
-    await request('mark-read', {'conversationId': id});
+    final direct = _isDirect(id);
+    final conversationId = _rawConversationId(id);
+    await request('mark-read', {
+      'conversationId': conversationId,
+      if (direct) 'conversationType': 'direct',
+    });
     for (final row in _rows[id]?.values ?? <Map<String, dynamic>>[]) {
       if (row['sender_user_id'] != auth.currentUser?.uid &&
           row['read_at'] == null) {

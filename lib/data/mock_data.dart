@@ -902,6 +902,9 @@ List<Order> seedOrders() {
     };
 
     final profile = vendorProfiles[profileIdx];
+    final statusIndex = profileIdx == 7
+        ? (index + index ~/ 12) % statuses.length
+        : index % statuses.length;
     final prodPrimary = profile.products[index % profile.products.length];
     final prodSecondary =
         profile.products[(index + 1) % profile.products.length];
@@ -935,15 +938,15 @@ List<Order> seedOrders() {
       customerName: customers[index % customers.length],
       vendorName: profile.name,
       stallName: profile.stall,
+      stallCategory: profile.category,
       items: items,
       discounts: index % 5 == 0 ? 25 : 0,
       deliveryFee: 40,
       platformFee: 15,
-      refundAmount:
-          statuses[index % statuses.length] == OrderStatus.refunded ? 120 : 0,
+      refundAmount: statuses[statusIndex] == OrderStatus.refunded ? 120 : 0,
       paymentMethod: methods[index % methods.length],
-      paymentStatus: payments[index % payments.length],
-      status: statuses[index % statuses.length],
+      paymentStatus: payments[statusIndex],
+      status: statuses[statusIndex],
     );
   });
 }

@@ -860,7 +860,10 @@ class _MessagesPanelState extends ConsumerState<MessagesPanel>
                       controller: _messageController,
                       style:
                           TextStyle(fontSize: 12.5, color: colors.primaryText),
-                      onSubmitted: (_) => _sendMessage(),
+                      keyboardType: TextInputType.multiline,
+                      textInputAction: TextInputAction.newline,
+                      minLines: 1,
+                      maxLines: 4,
                       decoration: InputDecoration(
                         hintText: _selectedImageBytes != null
                             ? 'Add a caption or press send...'

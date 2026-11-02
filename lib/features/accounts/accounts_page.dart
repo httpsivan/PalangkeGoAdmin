@@ -309,7 +309,9 @@ class _AccountsPageState extends ConsumerState<AccountsPage> {
                                                 .contains('closed upon') ==
                                             true))
                                 : enumLabel(v.status) == status)) &&
-            (stallCategory == 'All Categories' || v.stallType == stallCategory),
+            (stallCategory == 'All Categories' ||
+                v.stallType.trim().toLowerCase() ==
+                    stallCategory.trim().toLowerCase()),
       )
       .toList();
   String get effectiveCustomerStatus =>
@@ -370,7 +372,8 @@ class _AccountsPageState extends ConsumerState<AccountsPage> {
                                               true))
                                   : enumLabel(v.status) == status)) &&
               (stallCategory == 'All Categories' ||
-                  v.stallType == stallCategory),
+                  v.stallType.trim().toLowerCase() ==
+                      stallCategory.trim().toLowerCase()),
         )
         .toList()
       ..sort((a, b) => b.registeredAt.compareTo(a.registeredAt));
@@ -694,21 +697,23 @@ class _VendorTable extends StatelessWidget {
                               ),
               )),
               DataCell(
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      onPressed: () =>
-                          showStallProductsDialog(context, vendor: vendor),
-                      icon: const Icon(Icons.inventory_2_outlined, size: 16),
-                      tooltip: 'View Stall Products & Inventory',
-                    ),
-                    IconButton(
-                      onPressed: () => onOpen(vendor),
-                      icon: const Icon(Icons.visibility_outlined, size: 20),
-                      tooltip: 'View account details',
-                    ),
-                  ],
+                Center(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        onPressed: () =>
+                            showStallProductsDialog(context, vendor: vendor),
+                        icon: const Icon(Icons.inventory_2_outlined, size: 16),
+                        tooltip: 'View Stall Products & Inventory',
+                      ),
+                      IconButton(
+                        onPressed: () => onOpen(vendor),
+                        icon: const Icon(Icons.visibility_outlined, size: 20),
+                        tooltip: 'View account details',
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -735,6 +740,7 @@ class _VendorTable extends StatelessWidget {
       ),
       DataColumn(
         columnWidth: FixedColumnWidth(130),
+        headingRowAlignment: MainAxisAlignment.center,
         label: Text('ACTIONS'),
       ),
     ];
@@ -1229,6 +1235,7 @@ class _AccountDetailsData {
     required this.residence,
     required this.accountType,
     required this.administrativeNotes,
+    this.stallName = '',
     required this.suspension,
     this.blockedReason,
     this.blockedFromReportId,
@@ -1259,6 +1266,7 @@ class _AccountDetailsData {
         residence: vendor.residence,
         accountType: 'Stall Holder',
         administrativeNotes: vendor.administrativeNotes,
+        stallName: vendor.stallName,
         suspension: suspension,
         blockedReason: vendor.blockedReason,
         blockedFromReportId: vendor.blockedFromReportId,
@@ -1309,6 +1317,7 @@ class _AccountDetailsData {
   final String residence;
   final String accountType;
   final String administrativeNotes;
+  final String stallName;
   final Suspension? suspension;
   final String? blockedReason;
   final String? blockedFromReportId;
@@ -1358,8 +1367,6 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
     text: widget.account.administrativeNotes,
   );
   late final Future<Map<String, dynamic>> history;
-  late final Future<List<AdminProduct>> products;
-  final Set<String> priceWarningsInProgress = {};
   bool saving = false;
   bool unblocking = false;
   bool lifting = false;
@@ -1405,12 +1412,6 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
             .read(supabaseAdminServiceProvider)
             .fetchAccountHistory(widget.account.id)
         : Future.value(<String, dynamic>{'activity': [], 'violations': []});
-    products = controller.supabaseEnabled &&
-            widget.account.accountType == 'Stall Holder'
-        ? ref
-            .read(supabaseAdminServiceProvider)
-            .fetchVendorProducts(widget.account.id)
-        : Future.value(const <AdminProduct>[]);
   }
 
   void _handleCloseRequest() => requestClose();
@@ -1911,297 +1912,6 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
     }
   }
 
-  Widget _productsSection(BuildContext context) {
-    final colors = semanticColors(context);
-    final liveBackend = ref.read(appDataProvider.notifier).supabaseEnabled;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _sectionTitle('PRODUCT LISTINGS & PRICE AUDIT'),
-        const SizedBox(height: 5),
-        Text(
-          'Compare listed prices with the current applicable DTI/SRP reference before issuing a warning.',
-          style: TextStyle(fontSize: 12, color: colors.mutedText),
-        ),
-        const SizedBox(height: 10),
-        if (!liveBackend)
-          const Text(
-              'Live product listings require the Supabase admin backend.')
-        else
-          FutureBuilder<List<AdminProduct>>(
-            future: products,
-            builder: (context, snapshot) {
-              if (snapshot.hasError) {
-                return const Text(
-                    'Could not load this stall holder’s products.');
-              }
-              if (!snapshot.hasData) {
-                return const LinearProgressIndicator();
-              }
-              final items = snapshot.data!;
-              if (items.isEmpty) return const Text('No products listed.');
-              return Column(
-                children: [
-                  for (final product in items)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 7),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: colors.cardBackground,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: colors.subtleBorder),
-                      ),
-                      child: Row(
-                        children: [
-                          _productThumbnail(product.imageUrl, size: 46),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  product.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                if (product.category.isNotEmpty)
-                                  Text(
-                                    product.category,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: colors.mutedText,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          SizedBox(
-                            width: 115,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  product.listedPrice == null
-                                      ? 'Price not set'
-                                      : '₱${NumberFormat('#,##0.00').format(product.listedPrice)} / ${product.priceUnit}',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                Text(
-                                  '${NumberFormat('0.##').format(product.stockQuantity)} ${product.priceUnit}${product.stockQuantity == 1 ? '' : 's'} · ${product.isInStock && product.stockQuantity > 0 ? 'In stock' : 'Out of stock'}',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: product.isInStock &&
-                                            product.stockQuantity > 0
-                                        ? colors.success
-                                        : colors.danger,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: 'View product details',
-                            onPressed: () => _showProductDetails(product),
-                            icon: const Icon(Icons.visibility_outlined),
-                          ),
-                          IconButton(
-                            tooltip: 'Send price warning',
-                            onPressed: product.listedPrice == null ||
-                                    priceWarningsInProgress.contains(product.id)
-                                ? null
-                                : () => _sendProductPriceWarning(product),
-                            icon: priceWarningsInProgress.contains(product.id)
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : Icon(
-                                    Icons.warning_amber_rounded,
-                                    color: colors.warning,
-                                  ),
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
-      ],
-    );
-  }
-
-  Widget _productThumbnail(String? url, {double size = 160}) => ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: SizedBox.square(
-          dimension: size,
-          child: url == null || url.isEmpty
-              ? const ColoredBox(
-                  color: Color(0xFFE2E8F0),
-                  child: Icon(Icons.inventory_2_outlined),
-                )
-              : Image.network(
-                  url,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) =>
-                      const ColoredBox(
-                    color: Color(0xFFE2E8F0),
-                    child: Icon(Icons.broken_image_outlined),
-                  ),
-                ),
-        ),
-      );
-
-  Future<void> _showProductDetails(AdminProduct product) => showDialog<void>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          contentPadding: EdgeInsets.zero,
-          clipBehavior: Clip.antiAlias,
-          content: SizedBox(
-            width: 430,
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _productThumbnail(product.imageUrl, size: 430),
-                  Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          product.name,
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        if (product.description.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(product.description),
-                        ],
-                        const Divider(height: 24),
-                        Text(
-                          product.listedPrice == null
-                              ? 'Listed price: not set'
-                              : 'Listed price: ₱${NumberFormat('#,##0.00').format(product.listedPrice)} / ${product.priceUnit}',
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Live stock: ${NumberFormat('0.##').format(product.stockQuantity)} ${product.priceUnit}',
-                        ),
-                        if (product.stallName.isNotEmpty) ...[
-                          const SizedBox(height: 6),
-                          Text('Stall: ${product.stallName}'),
-                        ],
-                        if (product.stallLocation.isNotEmpty)
-                          Text('Location: ${product.stallLocation}'),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Close'),
-            ),
-          ],
-        ),
-      );
-
-  Future<void> _sendProductPriceWarning(AdminProduct product) async {
-    final price = product.listedPrice;
-    if (price == null) return;
-    final message = TextEditingController(
-      text:
-          'Please review this price against the current applicable DTI/SRP and adjust it if it exceeds the reference price.',
-    );
-    String? warning;
-    try {
-      warning = await showDialog<String>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('Send product price warning'),
-          content: SizedBox(
-            width: 460,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('${widget.account.name} · ${product.name}'),
-                const SizedBox(height: 4),
-                Text(
-                  'Current listed price: ₱${NumberFormat('#,##0.00').format(price)} / ${product.priceUnit}',
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: message,
-                  minLines: 3,
-                  maxLines: 5,
-                  maxLength: 500,
-                  decoration: const InputDecoration(
-                    labelText: 'Warning notice',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
-            ),
-            FilledButton.icon(
-              onPressed: () {
-                final text = message.text.trim();
-                if (text.isNotEmpty) Navigator.pop(dialogContext, text);
-              },
-              icon: const Icon(Icons.send_rounded, size: 16),
-              label: const Text('Send Warning'),
-            ),
-          ],
-        ),
-      );
-    } finally {
-      message.dispose();
-    }
-    if (warning == null || !mounted) return;
-    setState(() => priceWarningsInProgress.add(product.id));
-    try {
-      await ref.read(supabaseAdminServiceProvider).sendProductPriceWarning(
-            productId: product.id,
-            message: warning,
-          );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text('Price warning sent to ${widget.account.name}.')),
-      );
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not send product warning: $error')),
-      );
-    } finally {
-      if (mounted) setState(() => priceWarningsInProgress.remove(product.id));
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final colors = semanticColors(context);
@@ -2273,117 +1983,12 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
                         ],
                       ),
                       const SizedBox(height: 21),
-                      if (widget.account.accountType == 'Stall Holder') ...[
-                        const SizedBox(height: 14),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: semanticColors(context)
-                                .infoContainer
-                                .withValues(alpha: 0.35),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                                color: semanticColors(context)
-                                    .info
-                                    .withValues(alpha: 0.3)),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 38,
-                                height: 38,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF0F4A3C),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: const Icon(Icons.inventory_2_outlined,
-                                    color: Colors.white, size: 20),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'Stall Products & Inventory Audit',
-                                      style: TextStyle(
-                                        fontSize: 12.5,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'Inspect listed products and audit pricing for DTI compliance.',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        color:
-                                            semanticColors(context).mutedText,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              ElevatedButton.icon(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF0F4A3C),
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 14, vertical: 10),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                onPressed: () {
-                                  final vendor = ref
-                                      .read(appDataProvider)
-                                      .vendors
-                                      .firstWhere(
-                                        (v) => v.id == widget.account.id,
-                                        orElse: () => Vendor(
-                                          id: widget.account.id,
-                                          name: widget.account.name,
-                                          email: widget.account.email,
-                                          stallType: widget.account.stallType,
-                                          registeredAt:
-                                              widget.account.registeredAt,
-                                          status: widget.account.status,
-                                          location: widget.account.location,
-                                          orders: widget.account.orders,
-                                          transactions:
-                                              widget.account.transactions,
-                                          phone: widget.account.phone,
-                                          residence: widget.account.residence,
-                                        ),
-                                      );
-                                  showStallProductsDialog(context,
-                                      vendor: vendor);
-                                },
-                                icon: const Icon(Icons.arrow_forward_rounded,
-                                    size: 14),
-                                label: const Text(
-                                  'View Catalog',
-                                  style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 21),
                       _sectionTitle('CONTACT INFORMATION'),
                       const SizedBox(height: 10),
                       _contactRow(
                           context, 'Email Address', widget.account.email),
                       _contactRow(
                           context, 'Phone Number', widget.account.phone),
-                      if (widget.account.accountType == 'Stall Holder') ...[
-                        const SizedBox(height: 20),
-                        _productsSection(context),
-                      ],
                       const SizedBox(height: 20),
                       FutureBuilder<Map<String, dynamic>>(
                         future: history,
@@ -2584,6 +2189,20 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
                 style: GoogleFonts.inter(
                     fontSize: 12, fontWeight: FontWeight.w600),
               ),
+              if (widget.account.accountType == 'Stall Holder' &&
+                  widget.account.stallName.trim().isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Stall: ${widget.account.stallName}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: semanticColors(context).primaryText,
+                  ),
+                ),
+              ],
               const SizedBox(height: 4),
               Text(
                 widget.account.location,

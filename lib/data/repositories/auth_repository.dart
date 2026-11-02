@@ -199,6 +199,13 @@ class AuthController extends StateNotifier<bool> {
             return adminError;
           }
         }
+        if (_supabaseEnabled) {
+          try {
+            await _supabase?.recordAdminAudit('admin_logged_in');
+          } catch (error) {
+            debugPrint('[admin] Could not record sign-in audit: $error');
+          }
+        }
         state = true;
         return null;
       } finally {
@@ -220,6 +227,13 @@ class AuthController extends StateNotifier<bool> {
 
   Future<void> logout() async {
     if (_firebase) {
+      if (_supabaseEnabled) {
+        try {
+          await _supabase?.recordAdminAudit('admin_logged_out');
+        } catch (error) {
+          debugPrint('[admin] Could not record sign-out audit: $error');
+        }
+      }
       await FirebaseAdminService.instance.signOut();
       state = false; // also arrives via the authState listener
       return;

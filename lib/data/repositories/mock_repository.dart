@@ -137,6 +137,13 @@ class AppDataController extends StateNotifier<AppDataState> {
       );
     }
     if (supabaseEnabled) {
+      _applicationChannel = _supabase?.subscribeToApplicationChanges(() {
+        _applicationReloadTimer?.cancel();
+        _applicationReloadTimer = Timer(
+          const Duration(milliseconds: 200),
+          _reloadApplications,
+        );
+      });
       _complaintChannel = _supabase?.subscribeToComplaintChanges(() {
         _complaintReloadTimer?.cancel();
         _complaintReloadTimer = Timer(
@@ -160,15 +167,23 @@ class AppDataController extends StateNotifier<AppDataState> {
   StreamSubscription<void>? _liveDataSubscription;
   Timer? _liveReloadTimer;
   Timer? _complaintReloadTimer;
+  Timer? _applicationReloadTimer;
   RealtimeChannel? _complaintChannel;
+  RealtimeChannel? _applicationChannel;
 
   @override
   void dispose() {
     _liveReloadTimer?.cancel();
     _complaintReloadTimer?.cancel();
+    _applicationReloadTimer?.cancel();
     if (_complaintChannel != null) {
       unawaited(
         _supabase?.client?.removeChannel(_complaintChannel!).then((_) {}),
+      );
+    }
+    if (_applicationChannel != null) {
+      unawaited(
+        _supabase?.client?.removeChannel(_applicationChannel!).then((_) {}),
       );
     }
     _liveDataSubscription?.cancel();
@@ -183,6 +198,17 @@ class AppDataController extends StateNotifier<AppDataState> {
       state = state.copyWith(reports: reports);
     } catch (error) {
       debugPrint('[admin] Realtime complaint refresh failed: $error');
+    }
+  }
+
+  Future<void> _reloadApplications() async {
+    if (!supabaseEnabled || _supabase == null) return;
+    try {
+      final applications = await _supabase.fetchApplications();
+      if (!mounted) return;
+      state = state.copyWith(applications: applications);
+    } catch (error) {
+      debugPrint('[admin] Realtime application refresh failed: $error');
     }
   }
 
@@ -216,6 +242,7 @@ class AppDataController extends StateNotifier<AppDataState> {
     List<Report>? reports;
     List<Order>? orders;
     List<Announcement>? announcements;
+    List<AuditLog>? auditLogs;
     if (supabaseEnabled && _supabase != null) {
       try {
         final values = await Future.wait<Object>([
@@ -233,6 +260,11 @@ class AppDataController extends StateNotifier<AppDataState> {
       } catch (e) {
         debugPrint('[admin] Supabase reload failed: $e');
       }
+      try {
+        auditLogs = await _supabase.fetchAuditLogs();
+      } catch (e) {
+        debugPrint('[admin] Supabase audit log reload failed: $e');
+      }
     }
     state = state.copyWith(
       suspensions: accounts?.suspensions ?? state.suspensions,
@@ -242,7 +274,7 @@ class AppDataController extends StateNotifier<AppDataState> {
       reports: reports ?? state.reports,
       renewals: data?.renewals,
       orders: orders ?? data?.orders,
-      auditLogs: data?.auditLogs,
+      auditLogs: auditLogs ?? data?.auditLogs,
       announcements: announcements ?? data?.announcements,
     );
   }
@@ -878,6 +910,7 @@ class AppDataController extends StateNotifier<AppDataState> {
     required String note,
     String decision = 'No Violation',
     String actionTaken = 'Dismissed',
+    ReportStatus closureStatus = ReportStatus.dismissed,
   }) async {
     await _wait();
     final report = _firstOrNull(
@@ -891,7 +924,9 @@ class AppDataController extends StateNotifier<AppDataState> {
     if (supabaseEnabled && _supabase != null) {
       final error = await _supabase.reviewComplaint(
         complaintId: reportId,
-        status: 'dismissed',
+        status: closureStatus == ReportStatus.resolved
+            ? 'resolved'
+            : 'dismissed',
         adminNotes: note,
       );
       if (error != null) return error;
@@ -942,6 +977,7 @@ class AppDataController extends StateNotifier<AppDataState> {
         note: note,
         decision: 'Resolved',
         actionTaken: 'Marked as Resolved',
+        closureStatus: ReportStatus.resolved,
       );
 
   Future<String?> suspendAccountFromReport({

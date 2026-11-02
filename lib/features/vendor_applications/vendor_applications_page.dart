@@ -524,17 +524,16 @@ class _ApplicationTable extends StatelessWidget {
               ),
             ),
             DataCell(
-              ApplicationStatusBadge(status: item.status),
-            ),
-            DataCell(
-              TableActionReviewButton(
+                Center(child: ApplicationStatusBadge(status: item.status))),
+            DataCell(Center(
+              child: TableActionReviewButton(
                 label: isResolved ? 'View Details' : 'Review',
                 tooltip: isResolved
                     ? 'View application details'
                     : 'Review application',
                 onPressed: () => onOpen(item),
               ),
-            ),
+            )),
           ],
         );
       },
@@ -543,6 +542,7 @@ class _ApplicationTable extends StatelessWidget {
       verticalController: verticalController,
       minWidth: 0,
       horizontalScroll: false,
+      horizontalMargin: 6,
       columnSpacing: 12,
       emptyState: emptyState,
       columns: const [
@@ -568,10 +568,12 @@ class _ApplicationTable extends StatelessWidget {
         ),
         DataColumn(
           columnWidth: FlexColumnWidth(1.35),
+          headingRowAlignment: MainAxisAlignment.center,
           label: Text('VERIFICATION STATUS'),
         ),
         DataColumn(
           columnWidth: FixedColumnWidth(120),
+          headingRowAlignment: MainAxisAlignment.center,
           label: Text('ACTIONS'),
         ),
       ],

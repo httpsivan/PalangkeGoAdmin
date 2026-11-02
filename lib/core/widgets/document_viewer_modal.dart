@@ -30,7 +30,6 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
       TransformationController();
   double _currentScale = 1.0;
   int _pdfCurrentPage = 1;
-  String _idSide = 'front';
 
   @override
   void initState() {
@@ -72,7 +71,6 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
     setState(() {
       currentIndex = index;
       _pdfCurrentPage = 1;
-      _idSide = 'front';
       _resetZoom();
     });
   }
@@ -223,10 +221,7 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
                 Row(
                   children: [
                     Text(
-                      doc.hasBackSide ||
-                              doc.name.toLowerCase().contains('government id')
-                          ? '${doc.name} (${_idSide == 'front' ? 'Front Side' : 'Back Side'})'
-                          : doc.name,
+                      doc.name,
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
@@ -250,98 +245,6 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
                         ),
                       ),
                     ),
-                    if (doc.hasBackSide ||
-                        doc.name.toLowerCase().contains('government id')) ...[
-                      const SizedBox(width: 14),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: colors.subtleBorder.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                              color:
-                                  colors.subtleBorder.withValues(alpha: 0.6)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            InkWell(
-                              onTap: () => setState(() => _idSide = 'front'),
-                              borderRadius: BorderRadius.circular(20),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: _idSide == 'front'
-                                      ? colors.accent
-                                      : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.badge_rounded,
-                                      size: 13,
-                                      color: _idSide == 'front'
-                                          ? Colors.white
-                                          : colors.secondaryText,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'Front',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                        color: _idSide == 'front'
-                                            ? Colors.white
-                                            : colors.secondaryText,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            InkWell(
-                              onTap: () => setState(() => _idSide = 'back'),
-                              borderRadius: BorderRadius.circular(20),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: _idSide == 'back'
-                                      ? colors.accent
-                                      : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.flip_to_back_rounded,
-                                      size: 13,
-                                      color: _idSide == 'back'
-                                          ? Colors.white
-                                          : colors.secondaryText,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'Back',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                        color: _idSide == 'back'
-                                            ? Colors.white
-                                            : colors.secondaryText,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
                   ],
                 ),
                 const SizedBox(height: 2),
@@ -420,20 +323,7 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
   }
 
   Widget _buildImageViewer(BuildContext context, KycDocument doc) {
-    final isGovId =
-        doc.hasBackSide || doc.name.toLowerCase().contains('government id');
-
-    if (isGovId && _idSide == 'back') {
-      final hasBack = doc.isBackSubmitted &&
-          (doc.idBackAssetPath != null || doc.idBackUrl != null);
-      if (!hasBack) {
-        return _buildMissingBackSidePlaceholder(context, doc);
-      }
-    }
-
-    final targetAsset = (isGovId && _idSide == 'back')
-        ? (doc.idBackAssetPath ?? doc.assetPath)
-        : (doc.idFrontAssetPath ?? doc.assetPath);
+    final targetAsset = doc.idFrontAssetPath ?? doc.assetPath;
 
     if (targetAsset != null) {
       return InteractiveViewer(
@@ -445,15 +335,13 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
             targetAsset,
             fit: BoxFit.contain,
             errorBuilder: (_, __, ___) =>
-                _buildGovernmentIdCardImage(doc, isFront: _idSide == 'front'),
+                _buildGovernmentIdCardImage(doc),
           ),
         ),
       );
     }
 
-    final targetUrl = (isGovId && _idSide == 'back')
-        ? (doc.idBackUrl ?? doc.fileUrl)
-        : (doc.idFrontUrl ?? doc.fileUrl);
+    final targetUrl = doc.idFrontUrl ?? doc.fileUrl;
     if (targetUrl != null && targetUrl.isNotEmpty) {
       return InteractiveViewer(
         transformationController: _transformationController,
@@ -474,7 +362,7 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
       minScale: 0.8,
       maxScale: 4.0,
       child: Center(
-        child: _buildGovernmentIdCardImage(doc, isFront: _idSide == 'front'),
+        child: _buildGovernmentIdCardImage(doc),
       ),
     );
   }
@@ -490,88 +378,6 @@ class _DocumentViewerModalState extends State<DocumentViewerModal> {
           ],
         ),
       );
-
-  Widget _buildMissingBackSidePlaceholder(
-      BuildContext context, KycDocument doc) {
-    final colors = semanticColors(context);
-    return Center(
-      child: Container(
-        width: 520,
-        padding: const EdgeInsets.all(32),
-        decoration: BoxDecoration(
-          color: colors.cardBackground,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: colors.subtleBorder, width: 1.5),
-          boxShadow: const [
-            BoxShadow(
-              color: Colors.black12,
-              blurRadius: 16,
-              offset: Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.flip_to_back_rounded,
-                size: 48,
-                color: Color(0xFFD97706),
-              ),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              'Back Side Not Yet Submitted',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: colors.primaryText,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'The applicant submitted the Front Side of their ${doc.name}, but the Back Side is missing or pending re-upload.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12.5,
-                color: colors.secondaryText,
-                height: 1.5,
-              ),
-            ),
-            const SizedBox(height: 20),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: colors.subtleBorder.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: const [
-                  Icon(Icons.info_outline_rounded,
-                      size: 16, color: Color(0xFFD97706)),
-                  SizedBox(width: 8),
-                  Text(
-                    'Use "Request Additional Documents" below to notify vendor.',
-                    style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _buildGovernmentIdCardImage(KycDocument doc, {bool isFront = true}) {
     return Container(

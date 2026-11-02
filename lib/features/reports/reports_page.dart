@@ -687,12 +687,14 @@ class _ReportedAccount {
     required this.name,
     required this.type,
     required this.status,
+    this.phone = '',
   });
 
   final String id;
   final String name;
   final String type;
   final AccountStatus status;
+  final String phone;
 }
 
 class ReportReviewDialog extends ConsumerStatefulWidget {
@@ -719,12 +721,17 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
         widget.report.type == 'Stall Holder') {
       for (final vendor in data.vendors) {
         final name = vendor.name.trim().toLowerCase();
-        if (name == issue || name == vendorName) {
+        final stallName = vendor.stallName.trim().toLowerCase();
+        if (name == issue ||
+            name == vendorName ||
+            stallName == issue ||
+            stallName == vendorName) {
           return _ReportedAccount(
             id: vendor.id,
             name: vendor.name,
             type: 'Stall Holder',
             status: vendor.status,
+            phone: vendor.phone,
           );
         }
       }
@@ -857,78 +864,55 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
     }
   }
 
-  Future<void> _blockAccount(_ReportedAccount? account) async {
-    if (account == null || processing) return;
-    final reason = TextEditingController();
-    String? validationError;
+  Future<void> _dismissReport() async {
+    if (processing) return;
+    final note = TextEditingController();
     try {
       final confirmed = await showDialog<bool>(
         context: context,
-        builder: (dialogContext) => StatefulBuilder(
-          builder: (context, setDialogState) => AlertDialog(
-            title: const Text('Block Account?'),
-            content: SizedBox(
-              width: 430,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Reported User: ${account.name}'),
-                  const SizedBox(height: 6),
-                  Text('Account Type: ${account.type}'),
-                  const SizedBox(height: 6),
-                  Text('Related Report: #${widget.report.id}'),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: reason,
-                    minLines: 2,
-                    maxLines: 4,
-                    onChanged: (_) {
-                      if (validationError != null) {
-                        setDialogState(() => validationError = null);
-                      }
-                    },
-                    decoration: InputDecoration(
-                      labelText: 'Blocking Reason *',
-                      hintText: 'Enter the reason for blocking',
-                      errorText: validationError,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: semanticColors(context).danger,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Dismiss Report?'),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Report: #${widget.report.id}'),
+                const SizedBox(height: 10),
+                const Text(
+                  'This closes the report as dismissed and does not change the reported account.',
                 ),
-                onPressed: () {
-                  if (reason.text.trim().isEmpty) {
-                    setDialogState(
-                      () => validationError = 'A blocking reason is required.',
-                    );
-                    return;
-                  }
-                  Navigator.pop(dialogContext, true);
-                },
-                icon: const Icon(Icons.block_outlined, size: 17),
-                label: const Text('Block Account'),
-              ),
-            ],
+                const SizedBox(height: 14),
+                TextField(
+                  controller: note,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Optional Dismissal Note',
+                    hintText: 'Add a note explaining why this report is dismissed',
+                  ),
+                ),
+              ],
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Dismiss Report'),
+            ),
+          ],
         ),
       );
       if (confirmed != true || !mounted) return;
       setState(() => processing = true);
-      final error =
-          await ref.read(appDataProvider.notifier).blockAccountFromReport(
-                reportId: widget.report.id,
-                reason: reason.text,
-              );
+      final error = await ref.read(appDataProvider.notifier).dismissReport(
+            reportId: widget.report.id,
+            note: note.text,
+          );
       if (!mounted) return;
       if (error != null) {
         setState(() => processing = false);
@@ -936,21 +920,14 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
         return;
       }
       final messenger = ScaffoldMessenger.of(context);
-      final router = GoRouter.of(context);
       Navigator.pop(context);
       messenger.showSnackBar(
         const SnackBar(
-          content:
-              Text('Account blocked successfully. Report moved to Resolved.'),
+          content: Text('Report dismissed. The account was not changed.'),
         ),
       );
-      router.go(
-        '/accounts?accountId=${Uri.encodeComponent(account.id)}&open=1',
-      );
     } finally {
-      Future.delayed(const Duration(milliseconds: 300), () {
-        reason.dispose();
-      });
+      Future.delayed(const Duration(milliseconds: 300), note.dispose);
     }
   }
 
@@ -1010,7 +987,6 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
   @override
   Widget build(BuildContext context) {
     final resolved = widget.report.status == ReportStatus.resolved;
-    final account = _reportedAccount(ref.watch(appDataProvider));
     final screenHeight = MediaQuery.sizeOf(context).height;
 
     return Dialog(
@@ -1123,7 +1099,7 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
             ),
             if (!resolved) ...[
               const Divider(height: 1),
-              _footer(context, account),
+              _footer(context),
             ] else ...[
               const Divider(height: 1),
               Padding(
@@ -1194,7 +1170,7 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
     );
   }
 
-  Widget _footer(BuildContext context, _ReportedAccount? account) {
+  Widget _footer(BuildContext context) {
     final warningStyle = FilledButton.styleFrom(
       backgroundColor: semanticColors(context).warning,
       minimumSize: const Size(0, 36),
@@ -1213,11 +1189,14 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
         borderRadius: BorderRadius.circular(18),
       ),
     );
-    final dangerStyle = FilledButton.styleFrom(
-      backgroundColor: semanticColors(context).danger,
+    final dismissColor = semanticColors(context).danger;
+    final dismissStyle = OutlinedButton.styleFrom(
       minimumSize: const Size(0, 36),
       padding: const EdgeInsets.symmetric(horizontal: 14),
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      foregroundColor: dismissColor,
+      backgroundColor: dismissColor.withValues(alpha: .08),
+      side: BorderSide(color: dismissColor.withValues(alpha: .45)),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
       ),
@@ -1242,12 +1221,11 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
       label: const Text('Mark as Resolved', style: TextStyle(fontSize: 11.5)),
     );
 
-    final blockBtn = FilledButton.icon(
-      onPressed:
-          processing || account == null ? null : () => _blockAccount(account),
-      style: dangerStyle,
-      icon: const Icon(Icons.block_outlined, size: 16),
-      label: const Text('Block Account', style: TextStyle(fontSize: 11.5)),
+    final dismissBtn = OutlinedButton.icon(
+      onPressed: processing ? null : _dismissReport,
+      style: dismissStyle,
+      icon: const Icon(Icons.do_not_disturb_on_outlined, size: 16),
+      label: const Text('Dismiss Report', style: TextStyle(fontSize: 11.5)),
     );
 
     return Container(
@@ -1263,7 +1241,7 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
               children: [
                 Expanded(child: warningBtn),
                 const SizedBox(width: 10),
-                Expanded(child: blockBtn),
+                Expanded(child: dismissBtn),
                 const SizedBox(width: 10),
                 Expanded(child: resolveBtn),
               ],
@@ -1276,7 +1254,7 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
                 children: [
                   Expanded(child: warningBtn),
                   const SizedBox(width: 10),
-                  Expanded(child: blockBtn),
+                  Expanded(child: dismissBtn),
                 ],
               ),
               const SizedBox(height: 10),
@@ -1446,6 +1424,21 @@ class _ReportReviewDialogState extends ConsumerState<ReportReviewDialog> {
                           reportedSubtitle,
                           style: const TextStyle(fontSize: 9),
                         ),
+                        if (account?.phone.trim().isNotEmpty == true) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(Icons.phone_outlined, size: 12),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  account!.phone,
+                                  style: const TextStyle(fontSize: 10),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                         const SizedBox(height: 11),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,

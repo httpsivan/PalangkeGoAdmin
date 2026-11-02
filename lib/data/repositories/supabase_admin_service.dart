@@ -140,6 +140,61 @@ class SupabaseAdminService {
     return Map<String, dynamic>.from(response.data as Map);
   }
 
+  Future<void> recordAdminAudit(String actionType,
+      {String remarks = ''}) async {
+    await _invoke('record-audit', {
+      'actionType': actionType,
+      'remarks': remarks,
+    });
+  }
+
+  Future<List<AuditLog>> fetchAuditLogs() async {
+    final response = await _invoke('audit-logs');
+    final rows = response['auditLogs'] as List<dynamic>? ?? const [];
+    return rows.map((value) {
+      final row = Map<String, dynamic>.from(value as Map);
+      final actionType = (row['action_type'] ?? '').toString();
+      final action = switch (actionType) {
+        'admin_logged_in' => AuditAction.login,
+        'admin_logged_out' => AuditAction.logout,
+        'approved_kyc' => AuditAction.approveKyc,
+        'rejected_kyc' => AuditAction.rejectKyc,
+        'blocked_user' ||
+        'suspended_user' ||
+        'suspended_vendor' =>
+          AuditAction.blockAccount,
+        'unblocked_user' => AuditAction.unblockAccount,
+        'lifted_suspension' => AuditAction.liftSuspension,
+        'resolved_report' || 'reviewed_complaint' => AuditAction.resolveReport,
+        'published_announcement' ||
+        'updated_announcement' ||
+        'deleted_announcement' =>
+          AuditAction.sendAnnouncement,
+        'exported_report' => AuditAction.exportPdf,
+        _ => AuditAction.editAccountStatus,
+      };
+      final targetType = (row['target_type'] ?? 'system').toString();
+      final timestamp =
+          DateTime.tryParse(row['performed_at']?.toString() ?? '') ??
+              DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+      return AuditLog(
+        id: (row['log_id'] ?? row['id'] ?? '').toString(),
+        administratorId: (row['admin_id'] ?? '').toString(),
+        administratorName: (row['admin_name'] ?? 'Administrator').toString(),
+        action: action,
+        targetEntityType: targetType,
+        targetEntityId: (row['target_id'] ?? '').toString(),
+        targetUserName:
+            (row['admin_email'] ?? row['target_id'] ?? '').toString(),
+        previousValue: '',
+        newValue: actionType.replaceAll('_', ' '),
+        reason: (row['remarks'] ?? '').toString(),
+        metadata: const {},
+        timestamp: timestamp,
+      );
+    }).toList();
+  }
+
   Future<SupabaseAccounts> fetchAccounts() async {
     if (client == null) {
       return const SupabaseAccounts(vendors: [], customers: []);
@@ -231,6 +286,7 @@ class SupabaseAdminService {
             name: (user['full_name'] ?? user['email'] ?? id).toString(),
             email: (user['email'] ?? '').toString(),
             stallType: (stall['category'] ?? 'Unassigned').toString(),
+            stallName: (stall['stall_name'] ?? '').toString(),
             registeredAt: createdAt,
             status: status,
             administrativeNotes: notesByUser[id] ?? '',
@@ -529,6 +585,7 @@ class SupabaseAdminService {
             submittedAt: submittedAt,
             status: status,
             location: location,
+            email: (user['email'] ?? '').toString(),
             documents: documents,
             rejectionReason: kyc['rejection_reason'] as String?,
             reviewedAt: kyc['reviewed_at'] != null
@@ -571,6 +628,42 @@ class SupabaseAdminService {
         .channel('admin-complaints')
         .onBroadcast(
           event: 'complaint_changed',
+          callback: (_) => onChange(),
+        )
+        .subscribe();
+  }
+
+  RealtimeChannel? subscribeToApplicationChanges(VoidCallback onChange) {
+    final sb = client;
+    if (sb == null) return null;
+    return sb
+        .channel('admin-kyc-applications')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'kyc_submissions',
+          callback: (_) => onChange(),
+        )
+        .subscribe();
+  }
+
+  RealtimeChannel? subscribeToAdminNotificationChanges(
+    VoidCallback onChange,
+  ) {
+    final sb = client;
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (sb == null || userId == null || userId.isEmpty) return null;
+    return sb
+        .channel('admin-notifications-$userId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'notifications',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: userId,
+          ),
           callback: (_) => onChange(),
         )
         .subscribe();
@@ -636,6 +729,14 @@ class SupabaseAdminService {
       debugPrint('[admin] Supabase fetchNotifications failed: $e');
       rethrow;
     }
+  }
+
+  Future<void> markNotificationRead(String id) async {
+    await _invoke('mark-notification-read', {'notificationId': id});
+  }
+
+  Future<void> markAllNotificationsRead() async {
+    await _invoke('mark-all-notifications-read');
   }
 
   /// Updates application status in `kyc_submissions` and `stall_holders`.
@@ -780,6 +881,7 @@ class SupabaseAdminService {
                 (row['customer_name'] as String?) ?? 'Market Customer',
             vendorName: vendorName,
             stallName: stallName,
+            stallCategory: (stall['category'] as String?) ?? 'Others',
             items: items,
             discounts: ((row['discounts'] as num?) ?? 0.0).toDouble(),
             deliveryFee: ((row['delivery_fee'] as num?) ?? 0.0).toDouble(),

@@ -54,13 +54,32 @@ class AdminShell extends ConsumerWidget {
           children: [
             _TopNavigation(current: current),
             Expanded(
-              child: RepaintBoundary(child: child),
+              child: ScrollConfiguration(
+                behavior: const _AdminScrollBehavior(),
+                child: RepaintBoundary(child: child),
+              ),
             ),
           ],
         ),
       ),
     );
   }
+}
+
+class _AdminScrollBehavior extends MaterialScrollBehavior {
+  const _AdminScrollBehavior();
+
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) =>
+      const ClampingScrollPhysics();
+
+  @override
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) =>
+      child;
 }
 
 class _TopNavigation extends ConsumerStatefulWidget {

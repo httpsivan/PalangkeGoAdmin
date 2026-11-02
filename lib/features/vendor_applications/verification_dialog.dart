@@ -1072,6 +1072,9 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                 icon: Icons.email_outlined,
                 label: 'EMAIL ADDRESS',
                 value: () {
+                  final applicationEmail =
+                      widget.application?.email.trim() ?? '';
+                  if (applicationEmail.isNotEmpty) return applicationEmail;
                   final latestVendors = ref.watch(appDataProvider).vendors;
                   final vendor = latestVendors.cast<Vendor?>().firstWhere(
                         (v) =>
@@ -1084,7 +1087,7 @@ class _VerificationDialogState extends ConsumerState<VerificationDialog> {
                   if (vendor != null && vendor.email.isNotEmpty) {
                     return vendor.email;
                   }
-                  return '${widget.applicant.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '.')}@gmail.com';
+                  return 'Not provided';
                 }(),
               ),
               if (renewal != null) ...[

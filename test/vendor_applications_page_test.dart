@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:palengkego_admin/core/config/app_config.dart';
 import 'package:palengkego_admin/core/theme/app_theme.dart';
 import 'package:palengkego_admin/core/theme/theme_controller.dart';
 import 'package:palengkego_admin/data/mock_data.dart';
@@ -86,7 +87,8 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       return ProviderScope(
         overrides: [
-          sharedPreferencesProvider.overrideWithValue(preferences),
+          appConfigProvider.overrideWithValue(const AppConfig()),
+            sharedPreferencesProvider.overrideWithValue(preferences),
         ],
         child: MaterialApp(
           theme: buildLightTheme(),
@@ -207,6 +209,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            appConfigProvider.overrideWithValue(const AppConfig()),
             sharedPreferencesProvider.overrideWithValue(preferences),
           ],
           child: MaterialApp(
