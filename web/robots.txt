@@ -1,0 +1,4 @@
+# Requests compliant crawlers not to crawl the admin website.
+# This is advisory and does not enforce access control.
+User-agent: *
+Disallow: /
