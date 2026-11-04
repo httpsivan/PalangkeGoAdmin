@@ -9,6 +9,7 @@ import '../../features/admin_settings/admin_settings_page.dart';
 import '../../features/authentication/login_page.dart';
 import '../../features/overview/overview_page.dart';
 import '../../features/announcements/announcement_history_page.dart';
+import '../../features/messages/messages_page.dart';
 import '../../features/notifications/notifications_page.dart';
 import '../../features/reports/reports_page.dart';
 import '../../features/sales_reports/sales_reports_page.dart';
@@ -123,6 +124,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/notifications',
                 builder: (context, state) => const NotificationsPage(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/messages',
+                builder: (context, state) => MessagesPage(
+                  initialConversationId:
+                      state.uri.queryParameters['conversationId'],
+                ),
               ),
             ],
           ),

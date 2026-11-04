@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../../data/repositories/mock_repository.dart';
+import '../../../data/repositories/supabase_admin_service.dart';
 import '../../../models/admin_models.dart';
 import '../csv_exporter.dart';
 import '../platform_file_saver.dart';
@@ -111,6 +113,18 @@ class AdminExportService {
           newValue:
               '${doc.table.rows.length} records (${doc.header.activeFilters})',
         );
+
+    if (ref.read(supabaseEnabledProvider)) {
+      try {
+        await ref.read(supabaseAdminServiceProvider).recordAdminAudit(
+              'exported_report',
+              remarks:
+                  '${doc.reportName} exported as ${format.name}; ${doc.table.rows.length} records (${doc.header.activeFilters})',
+            );
+      } catch (error) {
+        debugPrint('[admin] Could not record report export audit: $error');
+      }
+    }
 
     if (context.mounted) {
       final formatLabel = switch (format) {

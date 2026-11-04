@@ -419,7 +419,7 @@ List<Vendor> seedVendors({List<Order>? ordersSource}) {
               ? DateTime(2024, 1, 15).subtract(Duration(days: index * 2))
               : null,
       blockedBy:
-          (isBlocked || isStallClosed) ? 'Kirren Michael Fraginal' : null,
+          (isBlocked || isStallClosed) ? 'Market Administrator' : null,
       closureRequestedAt: isClosureRequested
           ? DateTime.now().subtract(const Duration(hours: 14))
           : null,
@@ -902,6 +902,9 @@ List<Order> seedOrders() {
     };
 
     final profile = vendorProfiles[profileIdx];
+    final statusIndex = profileIdx == 7
+        ? (index + index ~/ 12) % statuses.length
+        : index % statuses.length;
     final prodPrimary = profile.products[index % profile.products.length];
     final prodSecondary =
         profile.products[(index + 1) % profile.products.length];
@@ -935,15 +938,15 @@ List<Order> seedOrders() {
       customerName: customers[index % customers.length],
       vendorName: profile.name,
       stallName: profile.stall,
+      stallCategory: profile.category,
       items: items,
       discounts: index % 5 == 0 ? 25 : 0,
       deliveryFee: 40,
       platformFee: 15,
-      refundAmount:
-          statuses[index % statuses.length] == OrderStatus.refunded ? 120 : 0,
+      refundAmount: statuses[statusIndex] == OrderStatus.refunded ? 120 : 0,
       paymentMethod: methods[index % methods.length],
-      paymentStatus: payments[index % payments.length],
-      status: statuses[index % statuses.length],
+      paymentStatus: payments[statusIndex],
+      status: statuses[statusIndex],
     );
   });
 }
@@ -978,7 +981,7 @@ List<Suspension> seedSuspensions() {
         startDate: now.subtract(Duration(days: 2 + i)),
         endDate: now.add(Duration(days: 5 + i)),
         administratorId: 'ADM-001',
-        administratorName: 'Kirren Michael Fraginal',
+        administratorName: 'Market Administrator',
         createdAt: now.subtract(Duration(days: 2 + i)),
         note: 'Stall temporarily held pending compliance review',
         notifyUser: true,
@@ -997,7 +1000,7 @@ List<Suspension> seedSuspensions() {
       startDate: now.subtract(const Duration(days: 1)),
       endDate: now.add(const Duration(days: 6)),
       administratorId: 'ADM-001',
-      administratorName: 'Kirren Michael Fraginal',
+      administratorName: 'Market Administrator',
       createdAt: now.subtract(const Duration(days: 1)),
       note: 'Account temporarily suspended for review',
       notifyUser: true,
@@ -1010,7 +1013,7 @@ List<Suspension> seedSuspensions() {
 
 List<AuditLog> seedAuditLogs() {
   final now = DateTime.now();
-  const adminName = 'Kirren Michael Fraginal';
+  const adminName = 'Market Administrator';
   return [
     AuditLog(
       id: 'AUD-8801',

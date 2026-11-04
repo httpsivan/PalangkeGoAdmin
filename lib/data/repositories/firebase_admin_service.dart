@@ -390,6 +390,7 @@ class FirebaseAdminService {
       customerName: (data['customerName'] as String?) ?? '',
       vendorName: vendorName,
       stallName: stallName,
+      stallCategory: (stall['category'] as String?) ?? 'Others',
       items: items,
       discounts:
           ((data['discountAmount'] as num?) ?? (data['discount'] as num?) ?? 0)
@@ -447,6 +448,7 @@ class FirebaseAdminService {
       submittedAt: _asDate(data['submittedAt']) ?? DateTime.now(),
       status: status,
       location: (stall['location'] as String?) ?? 'Unassigned',
+      email: (usersById[holderId]?['email'] as String?) ?? '',
       documents: documents,
       rejectionReason: data['rejectionReason'] as String?,
       reviewedAt: _asDate(data['reviewedAt']),

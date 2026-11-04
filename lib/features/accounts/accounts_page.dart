@@ -9,6 +9,7 @@ import '../../core/utils/export/module_export_data_builders.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/admin_widgets.dart';
 import '../../data/repositories/mock_repository.dart';
+import '../../data/repositories/supabase_admin_service.dart';
 import '../../models/admin_models.dart';
 import '../../models/app_models.dart';
 import 'stall_products_dialog.dart';
@@ -308,7 +309,9 @@ class _AccountsPageState extends ConsumerState<AccountsPage> {
                                                 .contains('closed upon') ==
                                             true))
                                 : enumLabel(v.status) == status)) &&
-            (stallCategory == 'All Categories' || v.stallType == stallCategory),
+            (stallCategory == 'All Categories' ||
+                v.stallType.trim().toLowerCase() ==
+                    stallCategory.trim().toLowerCase()),
       )
       .toList();
   String get effectiveCustomerStatus =>
@@ -369,7 +372,8 @@ class _AccountsPageState extends ConsumerState<AccountsPage> {
                                               true))
                                   : enumLabel(v.status) == status)) &&
               (stallCategory == 'All Categories' ||
-                  v.stallType == stallCategory),
+                  v.stallType.trim().toLowerCase() ==
+                      stallCategory.trim().toLowerCase()),
         )
         .toList()
       ..sort((a, b) => b.registeredAt.compareTo(a.registeredAt));
@@ -659,8 +663,8 @@ class _VendorTable extends StatelessWidget {
               ),
               DataCell(Text(vendor.stallType)),
               DataCell(Text(shortDate.format(vendor.registeredAt))),
-              DataCell(
-                vendor.closureRequestedAt != null
+              DataCell(Center(
+                child: vendor.closureRequestedAt != null
                     ? const StatusBadge(
                         label: 'Closure Requested',
                         kind: BadgeKind.warning,
@@ -691,22 +695,25 @@ class _VendorTable extends StatelessWidget {
                                         ? BadgeKind.danger
                                         : BadgeKind.warning,
                               ),
-              ),
+              )),
               DataCell(
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      onPressed: () => showStallProductsDialog(context, vendor: vendor),
-                      icon: const Icon(Icons.inventory_2_outlined, size: 16),
-                      tooltip: 'View Stall Products & Inventory',
-                    ),
-                    IconButton(
-                      onPressed: () => onOpen(vendor),
-                      icon: const Icon(Icons.open_in_new_rounded, size: 15),
-                      tooltip: 'Open Account Details',
-                    ),
-                  ],
+                Center(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        onPressed: () =>
+                            showStallProductsDialog(context, vendor: vendor),
+                        icon: const Icon(Icons.inventory_2_outlined, size: 16),
+                        tooltip: 'View Stall Products & Inventory',
+                      ),
+                      IconButton(
+                        onPressed: () => onOpen(vendor),
+                        icon: const Icon(Icons.visibility_outlined, size: 20),
+                        tooltip: 'View account details',
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -728,10 +735,12 @@ class _VendorTable extends StatelessWidget {
       ),
       DataColumn(
         columnWidth: FlexColumnWidth(1.35),
+        headingRowAlignment: MainAxisAlignment.center,
         label: Text('ACCOUNT STATUS'),
       ),
       DataColumn(
         columnWidth: FixedColumnWidth(130),
+        headingRowAlignment: MainAxisAlignment.center,
         label: Text('ACTIONS'),
       ),
     ];
@@ -797,19 +806,18 @@ class _CustomerTable extends StatelessWidget {
                 ),
               ),
               DataCell(
-                StatusBadge(
+                Center(
+                    child: StatusBadge(
                   label: enumLabel(customer.status),
                   kind: customer.status == AccountStatus.active
                       ? BadgeKind.success
                       : BadgeKind.danger,
-                ),
+                )),
               ),
               DataCell(
                 IconButton(
                   onPressed: () => onOpen(customer),
-                  icon: const Icon(Icons.open_in_new_rounded, size: 15),
-
-
+                  icon: const Icon(Icons.visibility_outlined, size: 20),
                   tooltip: 'Open account details',
                 ),
               ),
@@ -836,6 +844,7 @@ class _CustomerTable extends StatelessWidget {
         ),
         DataColumn(
           columnWidth: FlexColumnWidth(1.35),
+          headingRowAlignment: MainAxisAlignment.center,
           label: Text('ACCOUNT STATUS'),
         ),
         DataColumn(
@@ -853,7 +862,11 @@ Suspension? _suspensionForAccount(
   String accountId,
 ) {
   for (final suspension in suspensions) {
-    if (suspension.accountId == accountId) return suspension;
+    if (suspension.accountId == accountId &&
+        suspension.liftedAt == null &&
+        !suspension.isExpired) {
+      return suspension;
+    }
   }
   return null;
 }
@@ -932,7 +945,10 @@ Future<void> showAccountDialog(
                         child: _AccountDetailsDialog(
                           account: account,
                           closeRequests: closeRequests,
-                          onSave: (notes) => update(notes, account.status),
+                          onSave: (notes) => ref
+                              .read(appDataProvider.notifier)
+                              .saveAccountNotes(account.id, notes,
+                                  isVendor: vendor != null),
                           onUnblock: account.status == AccountStatus.blocked
                               ? (notes) => update(notes, AccountStatus.active)
                               : null,
@@ -941,9 +957,12 @@ Future<void> showAccountDialog(
                               : null,
                           onLift: account.suspension != null &&
                                   account.suspension!.liftedAt == null
-                              ? (_) => ref
-                                  .read(appDataProvider.notifier)
-                                  .liftSuspension(account.suspension!.id)
+                              ? (_) async {
+                                  final error = await ref
+                                      .read(appDataProvider.notifier)
+                                      .liftSuspension(account.suspension!.id);
+                                  if (error != null) throw StateError(error);
+                                }
                               : null,
                           onSuspend: account.status != AccountStatus.blocked &&
                                   (account.suspension == null ||
@@ -1036,15 +1055,22 @@ Future<bool?> showSuspensionDialog(
       firstDate: start ? DateTime.now() : startDate,
       lastDate: DateTime.now().add(const Duration(days: 3650)),
     );
-    if (selected == null) return;
+    if (selected == null || !dialogContext.mounted) return;
+    final time = await showTimePicker(
+      context: dialogContext,
+      initialTime: TimeOfDay.fromDateTime(start ? startDate : endDate),
+    );
+    if (time == null || !dialogContext.mounted) return;
+    final selectedDateTime = DateTime(
+        selected.year, selected.month, selected.day, time.hour, time.minute);
     setDialogState(() {
       if (start) {
-        startDate = selected;
+        startDate = selectedDateTime;
         if (!endDate.isAfter(startDate)) {
           endDate = startDate.add(const Duration(days: 1));
         }
       } else {
-        endDate = selected;
+        endDate = selectedDateTime;
       }
     });
   }
@@ -1114,7 +1140,7 @@ Future<bool?> showSuspensionDialog(
                         setDialogState(() => notifyUser = value ?? true),
                     title: const Text('Notify the account holder'),
                     subtitle: const Text(
-                        'Delivery is recorded locally in demo mode.'),
+                        'Send the reason and schedule to the account holder’s notifications. Internal notes stay private.'),
                   ),
                 ],
               ),
@@ -1194,277 +1220,6 @@ Widget _dateButton(
       ),
     );
 
-class _AccountDrawer extends ConsumerStatefulWidget {
-  const _AccountDrawer({required this.vendor});
-  final Vendor vendor;
-  @override
-  ConsumerState<_AccountDrawer> createState() => _AccountDrawerState();
-}
-
-class _AccountDrawerState extends ConsumerState<_AccountDrawer> {
-  late AccountStatus current = widget.vendor.status;
-  @override
-  Widget build(BuildContext context) {
-    final vendor = ref.watch(appDataProvider).vendors.firstWhere(
-          (item) => item.id == widget.vendor.id,
-          orElse: () => widget.vendor,
-        );
-    final colors = semanticColors(context);
-    return Material(
-      color: colors.elevatedSurface,
-      child: SafeArea(
-        child: SizedBox(
-          width: MediaQuery.sizeOf(context).width < 520
-              ? MediaQuery.sizeOf(context).width
-              : 410,
-          height: double.infinity,
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(22, 18, 14, 16),
-                child: Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        'Account Details',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 15,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close_rounded),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(22),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          AvatarCircle(name: vendor.name, size: 56),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  vendor.name,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                                Text(
-                                  'ID: ${vendor.id}',
-                                  style: const TextStyle(fontSize: 10),
-                                ),
-                                const SizedBox(height: 4),
-                                StatusBadge(
-                                  label: enumLabel(vendor.status),
-                                  kind: vendor.status == AccountStatus.active
-                                      ? BadgeKind.success
-                                      : vendor.status == AccountStatus.blocked
-                                          ? BadgeKind.danger
-                                          : BadgeKind.warning,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _metric(
-                              context,
-                              'RECENT ORDERS',
-                              '${vendor.orders}',
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _metric(
-                              context,
-                              'RECENT REVENUE',
-                              _accountRevenue(vendor.transactions),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 25),
-                      const SectionLabel('Contact Information'),
-                      const SizedBox(height: 12),
-                      _contact(context, 'Email Address', vendor.email),
-                      _contact(context, 'Phone Number', vendor.phone),
-                      const SizedBox(height: 17),
-                      const SectionLabel('Account Status'),
-                      const SizedBox(height: 9),
-                      DropdownButtonFormField<AccountStatus>(
-                        initialValue: current,
-                        items: AccountStatus.values
-                            .map(
-                              (value) => DropdownMenuItem(
-                                value: value,
-                                child: Text(enumLabel(value)),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (value) {
-                          if (value != null) {
-                            setState(() => current = value);
-                            ref
-                                .read(appDataProvider.notifier)
-                                .setVendorStatus(vendor.id, value);
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 22),
-                      const SectionLabel('Recent Activity'),
-                      const SizedBox(height: 10),
-                      _activity(
-                        context,
-                        'Renewed Stall Permit #44',
-                        'Today at 11:42 AM',
-                      ),
-                      _activity(
-                        context,
-                        'Processed monthly maintenance fee',
-                        'Yesterday at 4:15 PM',
-                      ),
-                      _activity(context, 'Updated profile', 'Jan 12, 2024'),
-                      const SizedBox(height: 12),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(13),
-                        decoration: BoxDecoration(
-                          color: colors.dangerContainer.withValues(alpha: .55),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Violation History',
-                              style: TextStyle(
-                                color: colors.danger,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            const Text(
-                              'Minor: Stall Encroachment',
-                              style: TextStyle(fontWeight: FontWeight.w800),
-                            ),
-                            const SizedBox(height: 4),
-                            const Text(
-                              'Stall extended beyond 2m limit. Warning issued on Nov 05, 2023.',
-                              style: TextStyle(fontSize: 10),
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'No major violations recorded in the last 24 months.',
-                              style: TextStyle(
-                                fontSize: 9,
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _metric(BuildContext context, String label, String value) => Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: semanticColors(context).infoContainer.withValues(alpha: .45),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              value,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
-            ),
-            Text(label, style: const TextStyle(fontSize: 8)),
-          ],
-        ),
-      );
-  Widget _contact(BuildContext context, String label, String value) => Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label, style: const TextStyle(fontSize: 8.5)),
-                  Text(
-                    value,
-                    style: const TextStyle(
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            IconButton(
-              onPressed: () => copyToClipboard(context, value),
-              icon: const Icon(Icons.copy_rounded, size: 14),
-            ),
-          ],
-        ),
-      );
-  Widget _activity(BuildContext context, String title, String time) => Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: Row(
-          children: [
-            Container(
-              width: 7,
-              height: 7,
-              decoration: BoxDecoration(
-                color: semanticColors(context).success,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 9),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(time, style: const TextStyle(fontSize: 9)),
-              ],
-            ),
-          ],
-        ),
-      );
-}
-
 class _AccountDetailsData {
   const _AccountDetailsData({
     required this.id,
@@ -1480,6 +1235,7 @@ class _AccountDetailsData {
     required this.residence,
     required this.accountType,
     required this.administrativeNotes,
+    this.stallName = '',
     required this.suspension,
     this.blockedReason,
     this.blockedFromReportId,
@@ -1510,6 +1266,7 @@ class _AccountDetailsData {
         residence: vendor.residence,
         accountType: 'Stall Holder',
         administrativeNotes: vendor.administrativeNotes,
+        stallName: vendor.stallName,
         suspension: suspension,
         blockedReason: vendor.blockedReason,
         blockedFromReportId: vendor.blockedFromReportId,
@@ -1560,6 +1317,7 @@ class _AccountDetailsData {
   final String residence;
   final String accountType;
   final String administrativeNotes;
+  final String stallName;
   final Suspension? suspension;
   final String? blockedReason;
   final String? blockedFromReportId;
@@ -1608,6 +1366,7 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
   late final TextEditingController notes = TextEditingController(
     text: widget.account.administrativeNotes,
   );
+  late final Future<Map<String, dynamic>> history;
   bool saving = false;
   bool unblocking = false;
   bool lifting = false;
@@ -1647,6 +1406,12 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
   void initState() {
     super.initState();
     widget.closeRequests.addListener(_handleCloseRequest);
+    final controller = ref.read(appDataProvider.notifier);
+    history = controller.supabaseEnabled
+        ? ref
+            .read(supabaseAdminServiceProvider)
+            .fetchAccountHistory(widget.account.id)
+        : Future.value(<String, dynamic>{'activity': [], 'violations': []});
   }
 
   void _handleCloseRequest() => requestClose();
@@ -2218,93 +1983,6 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
                         ],
                       ),
                       const SizedBox(height: 21),
-                      if (widget.account.accountType == 'Stall Holder') ...[
-                        const SizedBox(height: 14),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: semanticColors(context).infoContainer.withValues(alpha: 0.35),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: semanticColors(context).info.withValues(alpha: 0.3)),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 38,
-                                height: 38,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF0F4A3C),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: const Icon(Icons.inventory_2_outlined, color: Colors.white, size: 20),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'Stall Products & Inventory Audit',
-                                      style: TextStyle(
-                                        fontSize: 12.5,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'Inspect listed products and audit pricing for DTI compliance.',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        color: semanticColors(context).mutedText,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              ElevatedButton.icon(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF0F4A3C),
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                onPressed: () {
-                                  final vendor = ref
-                                      .read(appDataProvider)
-                                      .vendors
-                                      .firstWhere(
-                                        (v) => v.id == widget.account.id,
-                                        orElse: () => Vendor(
-                                          id: widget.account.id,
-                                          name: widget.account.name,
-                                          email: widget.account.email,
-                                          stallType: widget.account.stallType,
-                                          registeredAt: widget.account.registeredAt,
-                                          status: widget.account.status,
-                                          location: widget.account.location,
-                                          orders: widget.account.orders,
-                                          transactions: widget.account.transactions,
-                                          phone: widget.account.phone,
-                                          residence: widget.account.residence,
-                                        ),
-                                      );
-                                  showStallProductsDialog(context, vendor: vendor);
-                                },
-                                icon: const Icon(Icons.arrow_forward_rounded, size: 14),
-                                label: const Text(
-                                  'View Catalog',
-                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 21),
                       _sectionTitle('CONTACT INFORMATION'),
                       const SizedBox(height: 10),
                       _contactRow(
@@ -2312,15 +1990,54 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
                       _contactRow(
                           context, 'Phone Number', widget.account.phone),
                       const SizedBox(height: 20),
-                      _sectionTitle('RECENT ACTIVITY'),
-                      const SizedBox(height: 10),
-                      _activity(context, 'Renewed Stall Permit #44',
-                          'Today at 11:42 AM'),
-                      _activity(context, 'Processed monthly maintenance fee',
-                          'Yesterday at 4:15 PM'),
-                      _activity(context, 'Updated profile', 'Jan 12, 2024'),
-                      const SizedBox(height: 11),
-                      _violationCard(context),
+                      FutureBuilder<Map<String, dynamic>>(
+                        future: history,
+                        builder: (context, snapshot) {
+                          if (snapshot.hasError) {
+                            return const Text(
+                                'Could not load account history. Close and reopen to retry.');
+                          }
+                          if (!snapshot.hasData) {
+                            return const LinearProgressIndicator();
+                          }
+                          final activity =
+                              snapshot.data!['activity'] as List? ?? [];
+                          final violations =
+                              snapshot.data!['violations'] as List? ?? [];
+                          String when(dynamic item) {
+                            final date =
+                                DateTime.tryParse(item['at']?.toString() ?? '');
+                            return date == null
+                                ? ''
+                                : DateFormat('MMM d, yyyy, h:mm a')
+                                    .format(date.toLocal());
+                          }
+
+                          return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _sectionTitle('RECENT ACTIVITY'),
+                                const SizedBox(height: 10),
+                                if (activity.isEmpty)
+                                  const Text('No recent activity recorded.'),
+                                for (final item in activity)
+                                  _activity(context, item['title'].toString(),
+                                      when(item)),
+                                const SizedBox(height: 16),
+                                _sectionTitle('VIOLATION HISTORY'),
+                                const SizedBox(height: 10),
+                                if (violations.isEmpty)
+                                  const Text(
+                                      'No recorded warnings, suspensions, or blocks.'),
+                                for (final item in violations) ...[
+                                  _activity(context, item['title'].toString(),
+                                      when(item)),
+                                  Text((item['detail'] ?? '').toString()),
+                                  const SizedBox(height: 8),
+                                ],
+                              ]);
+                        },
+                      ),
                       const SizedBox(height: 20),
                       _sectionTitle('ADMINISTRATIVE NOTES'),
                       const SizedBox(height: 9),
@@ -2332,6 +2049,8 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
                         onChanged: (_) => setState(() {}),
                         decoration: const InputDecoration(
                           hintText: 'Add notes about this account...',
+                          helperText:
+                              'Private to administrators. Not sent to the account holder.',
                           alignLabelWithHint: true,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.all(Radius.circular(10)),
@@ -2470,6 +2189,20 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
                 style: GoogleFonts.inter(
                     fontSize: 12, fontWeight: FontWeight.w600),
               ),
+              if (widget.account.accountType == 'Stall Holder' &&
+                  widget.account.stallName.trim().isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Stall: ${widget.account.stallName}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: semanticColors(context).primaryText,
+                  ),
+                ),
+              ],
               const SizedBox(height: 4),
               Text(
                 widget.account.location,
@@ -2984,50 +2717,6 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
         ),
       );
 
-  Widget _violationCard(BuildContext context) {
-    final colors = semanticColors(context);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colors.dangerContainer.withValues(alpha: .55),
-        borderRadius: BorderRadius.circular(11),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Violation History',
-            style: GoogleFonts.inter(
-              color: colors.danger,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 9),
-          Text(
-            'Minor: Stall Encroachment',
-            style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Stall extended beyond the 2m limit. Warning issued on Nov 05, 2023.',
-            style: GoogleFonts.inter(fontSize: 10),
-          ),
-          const SizedBox(height: 7),
-          Text(
-            'No major violations recorded in the last 24 months.',
-            style: GoogleFonts.inter(
-              fontSize: 9,
-              color: colors.mutedText,
-              fontStyle: FontStyle.italic,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _footer(BuildContext context) {
     final colors = semanticColors(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -3104,7 +2793,7 @@ class _AccountDetailsDialogState extends ConsumerState<_AccountDetailsDialog> {
               child: OutlinedButton.icon(
                 onPressed: busy ? null : _liftSuspension,
                 style: OutlinedButton.styleFrom(
-backgroundColor: warningBg,
+                  backgroundColor: warningBg,
                   foregroundColor: warningFg,
                   side: BorderSide(color: warningBorder, width: 1.2),
                   shape: RoundedRectangleBorder(
@@ -3117,12 +2806,16 @@ backgroundColor: warningBg,
                     ? SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: warningFg),
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: warningFg),
                       )
                     : Icon(Icons.lock_open_rounded, size: 16, color: warningFg),
                 label: Text(
                   lifting ? 'Lifting...' : 'Lift',
-style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: warningFg),
+                  style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                      color: warningFg),
                 ),
               ),
             ),
@@ -3131,7 +2824,7 @@ style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: warningFg),
               child: OutlinedButton.icon(
                 onPressed: busy ? null : _suspend,
                 style: OutlinedButton.styleFrom(
-backgroundColor: warningBg,
+                  backgroundColor: warningBg,
                   foregroundColor: warningFg,
                   side: BorderSide(color: warningBorder, width: 1.2),
                   shape: RoundedRectangleBorder(
@@ -3144,12 +2837,17 @@ backgroundColor: warningBg,
                     ? SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: warningFg),
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: warningFg),
                       )
-                    : Icon(Icons.pause_circle_outline, size: 16, color: warningFg),
+                    : Icon(Icons.pause_circle_outline,
+                        size: 16, color: warningFg),
                 label: Text(
                   suspending ? 'Suspending...' : 'Suspend',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: warningFg),
+                  style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                      color: warningFg),
                 ),
               ),
             ),
@@ -3160,7 +2858,7 @@ backgroundColor: warningBg,
               child: OutlinedButton.icon(
                 onPressed: busy ? null : _block,
                 style: OutlinedButton.styleFrom(
-backgroundColor: dangerBg,
+                  backgroundColor: dangerBg,
                   foregroundColor: dangerFg,
                   side: BorderSide(color: dangerBorder, width: 1.2),
                   shape: RoundedRectangleBorder(
@@ -3173,12 +2871,16 @@ backgroundColor: dangerBg,
                     ? SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: dangerFg),
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: dangerFg),
                       )
                     : Icon(Icons.block_outlined, size: 16, color: dangerFg),
                 label: Text(
                   blocking ? 'Blocking...' : 'Block',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: dangerFg),
+                  style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                      color: dangerFg),
                 ),
               ),
             ),

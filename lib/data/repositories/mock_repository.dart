@@ -137,6 +137,13 @@ class AppDataController extends StateNotifier<AppDataState> {
       );
     }
     if (supabaseEnabled) {
+      _applicationChannel = _supabase?.subscribeToApplicationChanges(() {
+        _applicationReloadTimer?.cancel();
+        _applicationReloadTimer = Timer(
+          const Duration(milliseconds: 200),
+          _reloadApplications,
+        );
+      });
       _complaintChannel = _supabase?.subscribeToComplaintChanges(() {
         _complaintReloadTimer?.cancel();
         _complaintReloadTimer = Timer(
@@ -160,15 +167,23 @@ class AppDataController extends StateNotifier<AppDataState> {
   StreamSubscription<void>? _liveDataSubscription;
   Timer? _liveReloadTimer;
   Timer? _complaintReloadTimer;
+  Timer? _applicationReloadTimer;
   RealtimeChannel? _complaintChannel;
+  RealtimeChannel? _applicationChannel;
 
   @override
   void dispose() {
     _liveReloadTimer?.cancel();
     _complaintReloadTimer?.cancel();
+    _applicationReloadTimer?.cancel();
     if (_complaintChannel != null) {
       unawaited(
         _supabase?.client?.removeChannel(_complaintChannel!).then((_) {}),
+      );
+    }
+    if (_applicationChannel != null) {
+      unawaited(
+        _supabase?.client?.removeChannel(_applicationChannel!).then((_) {}),
       );
     }
     _liveDataSubscription?.cancel();
@@ -183,6 +198,17 @@ class AppDataController extends StateNotifier<AppDataState> {
       state = state.copyWith(reports: reports);
     } catch (error) {
       debugPrint('[admin] Realtime complaint refresh failed: $error');
+    }
+  }
+
+  Future<void> _reloadApplications() async {
+    if (!supabaseEnabled || _supabase == null) return;
+    try {
+      final applications = await _supabase.fetchApplications();
+      if (!mounted) return;
+      state = state.copyWith(applications: applications);
+    } catch (error) {
+      debugPrint('[admin] Realtime application refresh failed: $error');
     }
   }
 
@@ -216,6 +242,7 @@ class AppDataController extends StateNotifier<AppDataState> {
     List<Report>? reports;
     List<Order>? orders;
     List<Announcement>? announcements;
+    List<AuditLog>? auditLogs;
     if (supabaseEnabled && _supabase != null) {
       try {
         final values = await Future.wait<Object>([
@@ -233,15 +260,21 @@ class AppDataController extends StateNotifier<AppDataState> {
       } catch (e) {
         debugPrint('[admin] Supabase reload failed: $e');
       }
+      try {
+        auditLogs = await _supabase.fetchAuditLogs();
+      } catch (e) {
+        debugPrint('[admin] Supabase audit log reload failed: $e');
+      }
     }
     state = state.copyWith(
+      suspensions: accounts?.suspensions ?? state.suspensions,
       vendors: accounts?.vendors ?? data?.vendors,
       customers: accounts?.customers ?? data?.customers,
       applications: applications ?? data?.applications,
       reports: reports ?? state.reports,
       renewals: data?.renewals,
       orders: orders ?? data?.orders,
-      auditLogs: data?.auditLogs,
+      auditLogs: auditLogs ?? data?.auditLogs,
       announcements: announcements ?? data?.announcements,
     );
   }
@@ -338,11 +371,47 @@ class AppDataController extends StateNotifier<AppDataState> {
     );
   }
 
+  Future<void> saveAccountNotes(String id, String notes,
+      {required bool isVendor}) async {
+    if (supabaseEnabled && _supabase != null) {
+      final error = await _supabase.moderateAccount(id, 'notes',
+          notes: notes, notifyUser: false);
+      if (error != null) throw StateError(error);
+      await reload();
+      return;
+    }
+    if (firebaseEnabled) {
+      throw StateError('Saving notes requires the Supabase admin backend.');
+    }
+    if (isVendor) {
+      final account = state.vendors.firstWhere((item) => item.id == id);
+      await updateVendorAccount(id,
+          status: account.status, administrativeNotes: notes);
+    } else {
+      final account = state.customers.firstWhere((item) => item.id == id);
+      await updateCustomerAccount(id,
+          status: account.status, administrativeNotes: notes);
+    }
+  }
+
   Future<void> updateVendorAccount(
     String id, {
     required AccountStatus status,
     required String administrativeNotes,
   }) async {
+    if (supabaseEnabled && _supabase != null) {
+      final previous = state.vendors.where((item) => item.id == id).firstOrNull;
+      final operation = previous?.status == status
+          ? 'notes'
+          : status == AccountStatus.blocked
+              ? 'block'
+              : 'unblock';
+      final error = await _supabase.moderateAccount(id, operation,
+          notes: administrativeNotes);
+      if (error != null) throw StateError(error);
+      await reload();
+      return;
+    }
     if (firebaseEnabled || supabaseEnabled) {
       if (status == AccountStatus.blocked || status == AccountStatus.active) {
         await _setAccountBlocked(id, status == AccountStatus.blocked);
@@ -523,6 +592,20 @@ class AppDataController extends StateNotifier<AppDataState> {
     required AccountStatus status,
     required String administrativeNotes,
   }) async {
+    if (supabaseEnabled && _supabase != null) {
+      final previous =
+          state.customers.where((item) => item.id == id).firstOrNull;
+      final operation = previous?.status == status
+          ? 'notes'
+          : status == AccountStatus.blocked
+              ? 'block'
+              : 'unblock';
+      final error = await _supabase.moderateAccount(id, operation,
+          notes: administrativeNotes);
+      if (error != null) throw StateError(error);
+      await reload();
+      return;
+    }
     if (firebaseEnabled || supabaseEnabled) {
       if (status == AccountStatus.blocked || status == AccountStatus.active) {
         await _setAccountBlocked(id, status == AccountStatus.blocked);
@@ -827,6 +910,7 @@ class AppDataController extends StateNotifier<AppDataState> {
     required String note,
     String decision = 'No Violation',
     String actionTaken = 'Dismissed',
+    ReportStatus closureStatus = ReportStatus.dismissed,
   }) async {
     await _wait();
     final report = _firstOrNull(
@@ -840,7 +924,9 @@ class AppDataController extends StateNotifier<AppDataState> {
     if (supabaseEnabled && _supabase != null) {
       final error = await _supabase.reviewComplaint(
         complaintId: reportId,
-        status: 'dismissed',
+        status: closureStatus == ReportStatus.resolved
+            ? 'resolved'
+            : 'dismissed',
         adminNotes: note,
       );
       if (error != null) return error;
@@ -891,6 +977,7 @@ class AppDataController extends StateNotifier<AppDataState> {
         note: note,
         decision: 'Resolved',
         actionTaken: 'Marked as Resolved',
+        closureStatus: ReportStatus.resolved,
       );
 
   Future<String?> suspendAccountFromReport({
@@ -1292,6 +1379,19 @@ class AppDataController extends StateNotifier<AppDataState> {
     if (endDate.isBefore(DateTime.now())) {
       return 'The suspension cannot end in the past.';
     }
+    if (supabaseEnabled && _supabase != null) {
+      final error = await _supabase.moderateAccount(accountId, 'suspend',
+          notes: note,
+          reason: reason,
+          startDate: startDate,
+          endDate: endDate,
+          notifyUser: notifyUser);
+      if (error == null) await reload();
+      return error;
+    }
+    if (firebaseEnabled) {
+      return 'Suspension requires the Supabase admin backend.';
+    }
     final vendor =
         _firstOrNull(state.vendors.where((item) => item.id == accountId));
     final customer = _firstOrNull(
@@ -1357,6 +1457,15 @@ class AppDataController extends StateNotifier<AppDataState> {
       state.suspensions.where((item) => item.id == suspensionId),
     );
     if (current == null) return 'Suspension not found.';
+    if (supabaseEnabled && _supabase != null) {
+      final error = await _supabase.moderateAccount(current.accountId, 'lift',
+          suspensionId: suspensionId);
+      if (error == null) await reload();
+      return error;
+    }
+    if (firebaseEnabled) {
+      return 'Suspension requires the Supabase admin backend.';
+    }
     final lifted = current.lift(DateTime.now());
     state = state.copyWith(
       suspensions: state.suspensions

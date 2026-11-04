@@ -18,10 +18,14 @@ final supabaseAdminServiceProvider = Provider<SupabaseAdminService>((ref) {
 });
 
 class SupabaseAccounts {
-  const SupabaseAccounts({required this.vendors, required this.customers});
+  const SupabaseAccounts(
+      {required this.vendors,
+      required this.customers,
+      this.suspensions = const []});
 
   final List<Vendor> vendors;
   final List<Customer> customers;
+  final List<Suspension> suspensions;
 }
 
 Report mapSupabaseComplaintRow(Map<String, dynamic> row) {
@@ -136,6 +140,61 @@ class SupabaseAdminService {
     return Map<String, dynamic>.from(response.data as Map);
   }
 
+  Future<void> recordAdminAudit(String actionType,
+      {String remarks = ''}) async {
+    await _invoke('record-audit', {
+      'actionType': actionType,
+      'remarks': remarks,
+    });
+  }
+
+  Future<List<AuditLog>> fetchAuditLogs() async {
+    final response = await _invoke('audit-logs');
+    final rows = response['auditLogs'] as List<dynamic>? ?? const [];
+    return rows.map((value) {
+      final row = Map<String, dynamic>.from(value as Map);
+      final actionType = (row['action_type'] ?? '').toString();
+      final action = switch (actionType) {
+        'admin_logged_in' => AuditAction.login,
+        'admin_logged_out' => AuditAction.logout,
+        'approved_kyc' => AuditAction.approveKyc,
+        'rejected_kyc' => AuditAction.rejectKyc,
+        'blocked_user' ||
+        'suspended_user' ||
+        'suspended_vendor' =>
+          AuditAction.blockAccount,
+        'unblocked_user' => AuditAction.unblockAccount,
+        'lifted_suspension' => AuditAction.liftSuspension,
+        'resolved_report' || 'reviewed_complaint' => AuditAction.resolveReport,
+        'published_announcement' ||
+        'updated_announcement' ||
+        'deleted_announcement' =>
+          AuditAction.sendAnnouncement,
+        'exported_report' => AuditAction.exportPdf,
+        _ => AuditAction.editAccountStatus,
+      };
+      final targetType = (row['target_type'] ?? 'system').toString();
+      final timestamp =
+          DateTime.tryParse(row['performed_at']?.toString() ?? '') ??
+              DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+      return AuditLog(
+        id: (row['log_id'] ?? row['id'] ?? '').toString(),
+        administratorId: (row['admin_id'] ?? '').toString(),
+        administratorName: (row['admin_name'] ?? 'Administrator').toString(),
+        action: action,
+        targetEntityType: targetType,
+        targetEntityId: (row['target_id'] ?? '').toString(),
+        targetUserName:
+            (row['admin_email'] ?? row['target_id'] ?? '').toString(),
+        previousValue: '',
+        newValue: actionType.replaceAll('_', ' '),
+        reason: (row['remarks'] ?? '').toString(),
+        metadata: const {},
+        timestamp: timestamp,
+      );
+    }).toList();
+  }
+
   Future<SupabaseAccounts> fetchAccounts() async {
     if (client == null) {
       return const SupabaseAccounts(vendors: [], customers: []);
@@ -155,6 +214,30 @@ class SupabaseAdminService {
           .map((row) => Map<String, dynamic>.from(row as Map))
           .toList();
 
+      final notesByUser = <String, String>{
+        for (final row in response['notes'] as List? ?? [])
+          row['user_id'].toString(): (row['notes'] ?? '').toString(),
+      };
+      final suspensions = (response['suspensions'] as List? ?? []).map((row) {
+        final user =
+            users.where((u) => u['user_id'] == row['user_id']).firstOrNull;
+        return Suspension(
+          id: row['id'].toString(),
+          accountId: row['user_id'].toString(),
+          accountName: (user?['full_name'] ?? '').toString(),
+          accountType:
+              user?['role'] == 'customer' ? 'Customer' : 'Stall Holder',
+          reason: row['reason'].toString(),
+          note: (row['note'] ?? '').toString(),
+          startDate: DateTime.parse(row['starts_at']).toLocal(),
+          endDate: DateTime.parse(row['ends_at']).toLocal(),
+          createdAt: DateTime.parse(row['created_at']).toLocal(),
+          administratorId: row['admin_id'].toString(),
+          notifyUser: row['notify_user'] == true,
+          liftedAt:
+              DateTime.tryParse(row['lifted_at']?.toString() ?? '')?.toLocal(),
+        );
+      }).toList();
       final stallByUser = <String, Map<String, dynamic>>{};
       for (final stall in stalls) {
         stallByUser[(stall['user_id'] ?? '').toString()] = stall;
@@ -187,7 +270,9 @@ class SupabaseAdminService {
         final role = (user['role'] ?? '').toString().toLowerCase();
         final status = user['is_blocked'] == true
             ? AccountStatus.blocked
-            : AccountStatus.active;
+            : suspensions.any((item) => item.accountId == id && item.isActive)
+                ? AccountStatus.suspended
+                : AccountStatus.active;
         final createdAt =
             DateTime.tryParse(user['created_at']?.toString() ?? '') ??
                 DateTime.now();
@@ -201,8 +286,10 @@ class SupabaseAdminService {
             name: (user['full_name'] ?? user['email'] ?? id).toString(),
             email: (user['email'] ?? '').toString(),
             stallType: (stall['category'] ?? 'Unassigned').toString(),
+            stallName: (stall['stall_name'] ?? '').toString(),
             registeredAt: createdAt,
             status: status,
+            administrativeNotes: notesByUser[id] ?? '',
             location: [
               if (stallNumber.isNotEmpty) 'Stall $stallNumber',
               if (floor.isNotEmpty) 'Floor $floor',
@@ -221,10 +308,12 @@ class SupabaseAdminService {
             registeredAt: createdAt,
             transactions: customerOrderCounts[customerId] ?? 0,
             status: status,
+            administrativeNotes: notesByUser[id] ?? '',
           ));
         }
       }
-      return SupabaseAccounts(vendors: vendors, customers: customers);
+      return SupabaseAccounts(
+          vendors: vendors, customers: customers, suspensions: suspensions);
     } catch (e) {
       debugPrint('[admin] Supabase fetchAccounts failed: $e');
       rethrow;
@@ -496,6 +585,7 @@ class SupabaseAdminService {
             submittedAt: submittedAt,
             status: status,
             location: location,
+            email: (user['email'] ?? '').toString(),
             documents: documents,
             rejectionReason: kyc['rejection_reason'] as String?,
             reviewedAt: kyc['reviewed_at'] != null
@@ -538,6 +628,42 @@ class SupabaseAdminService {
         .channel('admin-complaints')
         .onBroadcast(
           event: 'complaint_changed',
+          callback: (_) => onChange(),
+        )
+        .subscribe();
+  }
+
+  RealtimeChannel? subscribeToApplicationChanges(VoidCallback onChange) {
+    final sb = client;
+    if (sb == null) return null;
+    return sb
+        .channel('admin-kyc-applications')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'kyc_submissions',
+          callback: (_) => onChange(),
+        )
+        .subscribe();
+  }
+
+  RealtimeChannel? subscribeToAdminNotificationChanges(
+    VoidCallback onChange,
+  ) {
+    final sb = client;
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (sb == null || userId == null || userId.isEmpty) return null;
+    return sb
+        .channel('admin-notifications-$userId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'notifications',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: userId,
+          ),
           callback: (_) => onChange(),
         )
         .subscribe();
@@ -603,6 +729,14 @@ class SupabaseAdminService {
       debugPrint('[admin] Supabase fetchNotifications failed: $e');
       rethrow;
     }
+  }
+
+  Future<void> markNotificationRead(String id) async {
+    await _invoke('mark-notification-read', {'notificationId': id});
+  }
+
+  Future<void> markAllNotificationsRead() async {
+    await _invoke('mark-all-notifications-read');
   }
 
   /// Updates application status in `kyc_submissions` and `stall_holders`.
@@ -747,6 +881,7 @@ class SupabaseAdminService {
                 (row['customer_name'] as String?) ?? 'Market Customer',
             vendorName: vendorName,
             stallName: stallName,
+            stallCategory: (stall['category'] as String?) ?? 'Others',
             items: items,
             discounts: ((row['discounts'] as num?) ?? 0.0).toDouble(),
             deliveryFee: ((row['delivery_fee'] as num?) ?? 0.0).toDouble(),
@@ -763,6 +898,54 @@ class SupabaseAdminService {
     } catch (e) {
       debugPrint('[admin] Supabase fetchOrders failed: $e');
       rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> fetchAccountHistory(String userId) =>
+      _invoke('account-history', {'userId': userId});
+
+  Future<List<AdminProduct>> fetchVendorProducts(String userId) async {
+    final response = await _invoke('stall-products', {'userId': userId});
+    return (response['products'] as List<dynamic>? ?? const [])
+        .map((row) =>
+            AdminProduct.fromJson(Map<String, dynamic>.from(row as Map)))
+        .toList();
+  }
+
+  Future<void> sendProductPriceWarning({
+    required String productId,
+    required String message,
+  }) async {
+    await _invoke('warn-product-price', {
+      'productId': productId,
+      'message': message.trim(),
+    });
+  }
+
+  Future<String?> moderateAccount(
+    String userId,
+    String operation, {
+    String? notes,
+    String? reason,
+    DateTime? startDate,
+    DateTime? endDate,
+    bool notifyUser = true,
+    String? suspensionId,
+  }) async {
+    try {
+      await _invoke('moderate-account', {
+        'userId': userId,
+        'operation': operation,
+        'notes': notes,
+        'reason': reason,
+        'startDate': startDate?.toUtc().toIso8601String(),
+        'endDate': endDate?.toUtc().toIso8601String(),
+        'notifyUser': notifyUser,
+        'suspensionId': suspensionId,
+      });
+      return null;
+    } catch (error) {
+      return error.toString();
     }
   }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:palengkego_admin/core/config/app_config.dart';
 import 'package:palengkego_admin/core/theme/app_theme.dart';
 import 'package:palengkego_admin/core/theme/theme_controller.dart';
 import 'package:palengkego_admin/models/app_models.dart';
@@ -208,7 +209,10 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     final preferences = await SharedPreferences.getInstance();
     final container = ProviderContainer(
-      overrides: [sharedPreferencesProvider.overrideWithValue(preferences)],
+      overrides: [
+        appConfigProvider.overrideWithValue(const AppConfig()),
+        sharedPreferencesProvider.overrideWithValue(preferences),
+      ],
     );
     addTearDown(container.dispose);
 

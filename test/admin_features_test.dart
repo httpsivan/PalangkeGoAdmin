@@ -98,6 +98,89 @@ void main() {
     );
   });
 
+  test('pending and failed payments do not count as sales', () {
+    final paid = seedOrders().firstWhere(
+      (order) =>
+          order.status == OrderStatus.completed &&
+          order.paymentStatus == PaymentStatus.paid,
+    );
+    Order makeUnpaidOrder(String id, PaymentStatus paymentStatus) => Order(
+          id: id,
+          transactionId: id,
+          placedAt: DateTime(2026, 11, 2),
+          customerName: 'Customer',
+          vendorName: 'Vendor',
+          stallName: 'Maritatas Stall',
+          stallCategory: 'Maritatas',
+          items: const [
+            OrderItem(
+                name: 'Vegetables',
+                category: 'Vegetables',
+                quantity: 1,
+                unitPrice: 50),
+          ],
+          discounts: 0,
+          deliveryFee: 0,
+          platformFee: 0,
+          refundAmount: 0,
+          paymentMethod: PaymentMethod.cashOnDelivery,
+          paymentStatus: paymentStatus,
+          status: OrderStatus.completed,
+        );
+    final pendingPayment =
+        makeUnpaidOrder('pending-payment', PaymentStatus.pending);
+    final failedPayment =
+        makeUnpaidOrder('failed-payment', PaymentStatus.failed);
+    final summary =
+        SalesSummary.fromOrders([paid, pendingPayment, failedPayment]);
+
+    expect(paid.contributesToSales, isTrue);
+    expect(pendingPayment.contributesToSales, isFalse);
+    expect(failedPayment.contributesToSales, isFalse);
+    expect(summary.totalOrders, 3);
+    expect(summary.grossSales, paid.total);
+    expect(summary.pendingPaymentOrders, 1);
+    expect(summary.pendingPaymentAmount, pendingPayment.total);
+  });
+
+  test(
+      'vegetable products are counted under their Maritatas or Sari-Sari stall',
+      () {
+    Order vegetableOrder(String id, String stallCategory, double price) =>
+        Order(
+          id: id,
+          transactionId: id,
+          placedAt: DateTime(2026, 11, 2),
+          customerName: 'Customer',
+          vendorName: 'Vendor',
+          stallName: '$stallCategory Stall',
+          stallCategory: stallCategory,
+          items: [
+            OrderItem(
+              name: 'Vegetables',
+              category: 'Vegetables',
+              quantity: 1,
+              unitPrice: price,
+            ),
+          ],
+          discounts: 0,
+          deliveryFee: 0,
+          platformFee: 0,
+          refundAmount: 0,
+          paymentMethod: PaymentMethod.cashOnDelivery,
+          paymentStatus: PaymentStatus.paid,
+          status: OrderStatus.completed,
+        );
+
+    final sales = salesByStallCategory([
+      vegetableOrder('mari-1', 'Maritatas', 50),
+      vegetableOrder('sari-1', 'Sari-Sari', 30),
+    ]);
+
+    expect(sales, {'Maritatas': 50, 'Sari-Sari': 30});
+    expect(salesByStallCategory(seedOrders())['Sari-Sari'], greaterThan(0));
+  });
+
   test('suspension is active only inside its date window', () {
     final now = DateTime.now();
     final suspension = Suspension(
@@ -176,6 +259,26 @@ void main() {
       controller.state.auditLogs.first.action,
       AuditAction.resolveReport,
     );
+  });
+
+  test('resolving a report records a resolved decision and action', () async {
+    SharedPreferences.setMockInitialValues({});
+    final preferences = await SharedPreferences.getInstance();
+    final controller = AppDataController(preferences, firebaseEnabled: false);
+    final report = controller.state.reports.first;
+
+    final error = await controller.resolveReport(
+      reportId: report.id,
+      note: 'Reviewed and addressed.',
+    );
+
+    expect(error, isNull);
+    final updated = controller.state.reports.firstWhere(
+      (item) => item.id == report.id,
+    );
+    expect(updated.status, ReportStatus.resolved);
+    expect(updated.decision, 'Resolved');
+    expect(updated.actionTaken, 'Marked as Resolved');
   });
 
   test('suspending a reported account resolves the report and can be lifted',

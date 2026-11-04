@@ -2,6 +2,60 @@ import 'package:intl/intl.dart';
 
 import 'app_models.dart';
 
+class AdminProduct {
+  const AdminProduct({
+    required this.id,
+    required this.name,
+    required this.category,
+    required this.unit,
+    required this.stockQuantity,
+    required this.isInStock,
+    this.description = '',
+    this.pricePerKg,
+    this.pricePerPiece,
+    this.imageUrl,
+    this.stallName = '',
+    this.stallLocation = '',
+  });
+
+  factory AdminProduct.fromJson(Map<String, dynamic> json) => AdminProduct(
+        id: (json['product_id'] ?? '').toString(),
+        name: (json['product_name'] ?? 'Unnamed product').toString(),
+        category: (json['category_tag'] ?? '').toString(),
+        description: (json['description'] ?? '').toString(),
+        unit: (json['unit'] ?? '').toString(),
+        pricePerKg: (json['price_per_kg'] as num?)?.toDouble(),
+        pricePerPiece: (json['price_per_piece'] as num?)?.toDouble(),
+        stockQuantity: (json['stock_quantity'] as num?)?.toDouble() ?? 0,
+        isInStock: json['is_in_stock'] == true,
+        imageUrl: json['image_url']?.toString(),
+        stallName: (json['stall_name'] ?? '').toString(),
+        stallLocation: (json['stall_location'] ?? '').toString(),
+      );
+
+  final String id;
+  final String name;
+  final String category;
+  final String description;
+  final String unit;
+  final double? pricePerKg;
+  final double? pricePerPiece;
+  final double stockQuantity;
+  final bool isInStock;
+  final String? imageUrl;
+  final String stallName;
+  final String stallLocation;
+
+  bool get isPiece => unit == 'piece' || unit == 'pc';
+
+  double? get listedPrice {
+    final price = isPiece ? pricePerPiece : pricePerKg;
+    return price != null && price.isFinite && price >= 0 ? price : null;
+  }
+
+  String get priceUnit => isPiece ? 'piece' : 'kg';
+}
+
 enum OrderStatus { pending, processing, completed, cancelled, refunded }
 
 enum PaymentStatus { pending, paid, failed, refunded, partiallyRefunded }
@@ -49,6 +103,7 @@ class Order {
     required this.customerName,
     required this.vendorName,
     required this.stallName,
+    this.stallCategory = 'Others',
     required this.items,
     required this.discounts,
     required this.deliveryFee,
@@ -65,6 +120,7 @@ class Order {
   final String customerName;
   final String vendorName;
   final String stallName;
+  final String stallCategory;
   final List<OrderItem> items;
   final double discounts;
   final double deliveryFee;
@@ -78,7 +134,10 @@ class Order {
   double get total => subtotal - discounts + deliveryFee + platformFee;
   double get netRevenue => total - refundAmount;
   bool get contributesToSales =>
-      status == OrderStatus.completed || status == OrderStatus.refunded;
+      (status == OrderStatus.completed || status == OrderStatus.refunded) &&
+      (paymentStatus == PaymentStatus.paid ||
+          paymentStatus == PaymentStatus.refunded ||
+          paymentStatus == PaymentStatus.partiallyRefunded);
   double get quantity => items.fold(0, (sum, item) => sum + item.quantity);
   String get categories =>
       items.map((item) => item.category).toSet().join(', ');
@@ -111,6 +170,8 @@ class SalesSummary {
     required this.totalOrders,
     required this.completedOrders,
     required this.pendingOrders,
+    required this.pendingPaymentOrders,
+    required this.pendingPaymentAmount,
     required this.cancelledOrders,
     required this.refundedOrders,
     required this.grossSales,
@@ -123,6 +184,8 @@ class SalesSummary {
   final int totalOrders;
   final int completedOrders;
   final int pendingOrders;
+  final int pendingPaymentOrders;
+  final double pendingPaymentAmount;
   final int cancelledOrders;
   final int refundedOrders;
   final double grossSales;
@@ -134,6 +197,10 @@ class SalesSummary {
   factory SalesSummary.fromOrders(Iterable<Order> orders) {
     final list = orders.toList();
     final salesOrders = list.where((item) => item.contributesToSales).toList();
+    final awaitingPayment = list.where((item) =>
+        item.paymentStatus == PaymentStatus.pending &&
+        item.status != OrderStatus.cancelled &&
+        item.status != OrderStatus.refunded);
     final gross = salesOrders.fold<double>(0, (sum, item) => sum + item.total);
     final disc =
         salesOrders.fold<double>(0, (sum, item) => sum + item.discounts);
@@ -150,6 +217,11 @@ class SalesSummary {
               item.status == OrderStatus.pending ||
               item.status == OrderStatus.processing)
           .length,
+      pendingPaymentOrders: awaitingPayment.length,
+      pendingPaymentAmount: awaitingPayment.fold<double>(
+        0,
+        (sum, item) => sum + item.total,
+      ),
       cancelledOrders:
           list.where((item) => item.status == OrderStatus.cancelled).length,
       refundedOrders:
@@ -162,6 +234,31 @@ class SalesSummary {
           salesOrders.fold<double>(0, (sum, item) => sum + item.netRevenue),
     );
   }
+}
+
+Map<String, double> salesByStallCategory(Iterable<Order> orders) {
+  const categories = {
+    'freshfish': 'Fresh Fish',
+    'driedfish': 'Dried Fish',
+    'meat': 'Meat',
+    'chicken': 'Chicken',
+    'fruits': 'Fruits',
+    'maritatas': 'Maritatas',
+    'sarisari': 'Sari-Sari',
+  };
+  final totals = <String, double>{};
+  for (final order in orders) {
+    if (!order.contributesToSales) continue;
+    final key = order.stallCategory
+        .trim()
+        .toLowerCase()
+        .replaceAll('-', '')
+        .replaceAll(' ', '');
+    final category = categories[key];
+    if (category == null) continue;
+    totals[category] = (totals[category] ?? 0) + order.subtotal;
+  }
+  return totals;
 }
 
 class Suspension {

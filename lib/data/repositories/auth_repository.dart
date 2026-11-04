@@ -11,7 +11,7 @@ import '../../models/admin_models.dart';
 import 'firebase_admin_service.dart';
 import 'supabase_admin_service.dart';
 
-const defaultAdminName = 'Kirren Michael Fraginal';
+const defaultAdminName = 'Market Administrator';
 const defaultAdminEmail = 'admin@palengkego.gov.ph';
 const defaultAdminPassword = 'Admin123!';
 
@@ -70,7 +70,9 @@ class AdminProfileController extends StateNotifier<AdminProfile> {
   AdminProfileController(this._preferences, this._supabase)
       : super(
           AdminProfile(
-            name: _preferences.getString('admin_name') ?? defaultAdminName,
+            name: _supabase.isConfigured
+                ? 'Market Administrator'
+                : _preferences.getString('admin_name') ?? defaultAdminName,
             email: defaultAdminEmail,
             password: _preferences.getString('admin_password') ??
                 defaultAdminPassword,
@@ -197,6 +199,13 @@ class AuthController extends StateNotifier<bool> {
             return adminError;
           }
         }
+        if (_supabaseEnabled) {
+          try {
+            await _supabase?.recordAdminAudit('admin_logged_in');
+          } catch (error) {
+            debugPrint('[admin] Could not record sign-in audit: $error');
+          }
+        }
         state = true;
         return null;
       } finally {
@@ -218,6 +227,13 @@ class AuthController extends StateNotifier<bool> {
 
   Future<void> logout() async {
     if (_firebase) {
+      if (_supabaseEnabled) {
+        try {
+          await _supabase?.recordAdminAudit('admin_logged_out');
+        } catch (error) {
+          debugPrint('[admin] Could not record sign-out audit: $error');
+        }
+      }
       await FirebaseAdminService.instance.signOut();
       state = false; // also arrives via the authState listener
       return;

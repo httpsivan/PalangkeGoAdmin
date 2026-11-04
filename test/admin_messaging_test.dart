@@ -1,0 +1,408 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:palengkego_admin/core/theme/app_theme.dart';
+import 'package:palengkego_admin/core/theme/theme_controller.dart';
+import 'package:palengkego_admin/core/widgets/messages_bell.dart';
+import 'package:palengkego_admin/data/repositories/admin_messaging_repository.dart';
+import 'package:palengkego_admin/models/chat_conversation.dart';
+import 'package:palengkego_admin/models/chat_message.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  group('Chat Models Serialization', () {
+    test('ChatMessage toJson and fromJson match schema', () {
+      final now = DateTime(2026, 10, 24, 22, 0);
+      final msg = ChatMessage(
+        id: 'msg_test_1',
+        conversationId: 'conv_1',
+        senderId: 'admin_1',
+        senderName: 'PalengkeGo Admin',
+        senderRole: 'admin',
+        text: 'Hello from market admin',
+        timestamp: now,
+        isRead: false,
+      );
+
+      final json = msg.toJson();
+      expect(json['id'], 'msg_test_1');
+      expect(json['sender_role'], 'admin');
+      expect(json['text'], 'Hello from market admin');
+
+      final reconstructed = ChatMessage.fromJson(json);
+      expect(reconstructed.id, msg.id);
+      expect(reconstructed.conversationId, msg.conversationId);
+      expect(reconstructed.isFromAdmin, isTrue);
+      expect(reconstructed.isFromCustomer, isFalse);
+      expect(reconstructed.isFromVendor, isFalse);
+    });
+
+    test(
+        'ChatMessage serializes UTC ISO8601 string and deserializes to local time',
+        () {
+      final localDt = DateTime(2026, 10, 26, 20, 30); // 8:30 PM local
+      final msg = ChatMessage(
+        id: 'msg_utc_test',
+        conversationId: 'conv_1',
+        senderId: 'admin_1',
+        senderName: 'PalengkeGo Admin',
+        senderRole: 'admin',
+        text: 'Sync test',
+        timestamp: localDt,
+        isRead: true,
+      );
+
+      final json = msg.toJson();
+      expect(json['timestamp'].toString().endsWith('Z'), isTrue,
+          reason: 'Saved timestamp must be UTC ending with Z');
+
+      final parsed = ChatMessage.fromJson(json);
+      expect(parsed.timestamp.isUtc, isFalse,
+          reason: 'Parsed timestamp should be local');
+      expect(parsed.timestamp.hour, localDt.hour);
+      expect(parsed.timestamp.minute, localDt.minute);
+    });
+
+    test('ChatConversation toJson and fromJson match schema', () {
+      final now = DateTime(2026, 10, 24, 22, 0);
+      final conv = ChatConversation(
+        id: 'conv_test_1',
+        stallId: 'VND-92858',
+        stallName: 'Omar Rivera (SARI-SARI)',
+        customerUid: 'cust_ana',
+        customerName: 'Ana Santos',
+        lastMessageText: 'May stock po ba?',
+        lastMessageTimestamp: now,
+        lastMessageSenderId: 'cust_ana',
+        adminUnreadCount: 1,
+        inquiryType: 'product',
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      final json = conv.toJson();
+      expect(json['stall_name'], 'Omar Rivera (SARI-SARI)');
+      expect(json['admin_unread_count'], 1);
+
+      final reconstructed = ChatConversation.fromJson(json);
+      expect(reconstructed.id, conv.id);
+      expect(reconstructed.stallId, conv.stallId);
+      expect(reconstructed.hasUnreadForAdmin, isTrue);
+      expect(reconstructed.displayStallName, 'Omar Rivera (Sari-sari)');
+
+      final fruitConv = conv.copyWith(stallName: "Mer's Mayao Fruit Stand");
+      expect(fruitConv.displayStallName, "Mer's Mayao (Fruit)");
+    });
+
+    test(
+        'ChatMessage.decodeBase64Image caches Uint8List reference to prevent image blinking on rebuilds',
+        () {
+      const dataUri =
+          'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+      final first = ChatMessage.decodeBase64Image(dataUri);
+      final second = ChatMessage.decodeBase64Image(dataUri);
+
+      expect(first, isNotNull);
+      expect(identical(first, second), isTrue);
+      expect(MemoryImage(first!), equals(MemoryImage(second!)));
+    });
+  });
+
+  group('AdminMessagingRepository', () {
+    test('test fixture supports the existing admin chat interface', () async {
+      final repo = _FixtureMessagingRepository();
+
+      final conversations = await repo.getConversations();
+      expect(conversations.isNotEmpty, isTrue);
+      expect(conversations.any((c) => c.stallName.contains('Omar Rivera')),
+          isTrue);
+
+      final firstConv = conversations.first;
+      final messages = await repo.getMessages(firstConv.id);
+      expect(messages.isNotEmpty, isTrue);
+
+      // Send admin message
+      final sent = await repo.sendMessage(
+        conversationId: firstConv.id,
+        text: 'Notice: Market inspection scheduled tomorrow.',
+      );
+
+      expect(sent.isFromAdmin, isTrue);
+      expect(sent.text, 'Notice: Market inspection scheduled tomorrow.');
+
+      final updatedMessages = await repo.getMessages(firstConv.id);
+      expect(updatedMessages.last.text,
+          'Notice: Market inspection scheduled tomorrow.');
+
+      // Mark as read
+      await repo.markAsRead(firstConv.id);
+      final readMessages = await repo.getMessages(firstConv.id);
+      expect(readMessages.every((m) => m.isRead), isTrue);
+
+      repo.dispose();
+    });
+  });
+
+  test(
+      'production repository refuses local-only sends when the backend is missing',
+      () async {
+    final repo = AdminMessagingRepository();
+    await expectLater(
+        repo.sendMessage(
+            conversationId: 'missing', text: 'Do not fake success'),
+        throwsStateError);
+  });
+  testWidgets('failed admin sends retain the draft for retry', (tester) async {
+    final repo = _FixtureMessagingRepository()..failSend = true;
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    await tester.pumpWidget(ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          adminMessagingRepositoryProvider.overrideWithValue(repo),
+        ],
+        child: MaterialApp(
+            theme: buildLightTheme(),
+            home: const Scaffold(body: Center(child: MessagesBell())))));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(MessagesBell));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Omar Rivera (Sari-sari)'));
+    await tester.pumpAndSettle();
+    final field = find.byType(TextField).last;
+    await tester.enterText(field, 'Keep this draft');
+    await tester.tap(find.byIcon(Icons.send_rounded));
+    await tester.pumpAndSettle();
+    expect(find.text('Keep this draft'), findsOneWidget);
+    expect(find.textContaining('Message not sent.'), findsOneWidget);
+    repo.dispose();
+  });
+
+  group('MessagesBell Widget', () {
+    late SharedPreferences prefs;
+
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
+      prefs = await SharedPreferences.getInstance();
+    });
+
+    testWidgets('renders MessagesBell and opens MessagesPanel on tap',
+        (tester) async {
+      final repo = _FixtureMessagingRepository();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(prefs),
+            adminMessagingRepositoryProvider.overrideWithValue(repo),
+          ],
+          child: MaterialApp(
+            theme: buildLightTheme(),
+            home: const Scaffold(
+              body: Center(
+                child: MessagesBell(),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Verify button exists
+      expect(find.byType(MessagesBell), findsOneWidget);
+      expect(find.byIcon(Icons.chat_bubble_outline_rounded), findsOneWidget);
+
+      // Tap messages button
+      await tester.tap(find.byType(MessagesBell));
+      await tester.pumpAndSettle();
+
+      // Verify popup panel opened with title
+      expect(find.text('Messages'), findsOneWidget);
+
+      // Tap on the first conversation to open thread
+      await tester.tap(find.text('Omar Rivera (Sari-sari)'));
+      await tester.pumpAndSettle();
+
+      // Verify bubble contains time (e.g. AM / PM) and does NOT contain month/year date
+      expect(find.textContaining(RegExp(r'\d{1,2}:\d{2}\s+(AM|PM)')),
+          findsWidgets);
+      expect(find.textContaining('Oct 26, 2026 •'), findsNothing);
+      expect(find.textContaining('Oct 26 •'), findsNothing);
+
+      repo.dispose();
+    });
+
+    testWidgets(
+        'automatically scrolls to the latest message when opening a conversation',
+        (tester) async {
+      final repo = _FixtureMessagingRepository();
+
+      // Add extra messages so the list overflows vertically
+      for (int i = 1; i <= 15; i++) {
+        await repo.sendMessage(
+          conversationId: 'conv_omar_rivera_admin',
+          text: 'Auto-scroll test message #$i',
+        );
+      }
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(prefs),
+            adminMessagingRepositoryProvider.overrideWithValue(repo),
+          ],
+          child: MaterialApp(
+            theme: buildLightTheme(),
+            home: const Scaffold(
+              body: Center(
+                child: MessagesBell(),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Open panel
+      await tester.tap(find.byType(MessagesBell));
+      await tester.pumpAndSettle();
+
+      // Tap on conversation
+      await tester.tap(find.text('Omar Rivera (Sari-sari)'));
+      await tester.pumpAndSettle();
+
+      // The latest message should be visible on screen
+      expect(find.text('Auto-scroll test message #15'), findsOneWidget);
+
+      repo.dispose();
+    });
+
+    testWidgets(
+        'renders delivery and read receipt checkmark icons on admin bubbles',
+        (tester) async {
+      final repo = _FixtureMessagingRepository();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(prefs),
+            adminMessagingRepositoryProvider.overrideWithValue(repo),
+          ],
+          child: MaterialApp(
+            theme: buildLightTheme(),
+            home: const Scaffold(
+              body: Center(
+                child: MessagesBell(),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(MessagesBell));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Omar Rivera (Sari-sari)'));
+      await tester.pumpAndSettle();
+
+      // Checkmarks should be present for message status (sent / read)
+      expect(find.byIcon(Icons.done_all_rounded), findsWidgets);
+
+      repo.dispose();
+    });
+  });
+}
+
+class _FixtureMessagingRepository extends AdminMessagingRepository {
+  _FixtureMessagingRepository() : super() {
+    final now = DateTime.now();
+    _messages.add(ChatMessage(
+        id: 'initial',
+        conversationId: _id,
+        senderId: 'admin',
+        senderName: 'Market Admin',
+        senderRole: 'admin',
+        text: 'Welcome',
+        timestamp: now,
+        isRead: true));
+  }
+  static const _id = 'conv_omar_rivera_admin';
+  final _messages = <ChatMessage>[];
+  final _events = StreamController<void>.broadcast();
+  bool _closed = false;
+  bool failSend = false;
+  ChatConversation get _conversation => ChatConversation(
+      id: _id,
+      stallId: 'stall-1',
+      stallName: 'Omar Rivera (Sari-sari)',
+      customerUid: 'admin_support',
+      customerName: 'Market Admin',
+      lastMessageText: _messages.last.text,
+      lastMessageTimestamp: _messages.last.timestamp,
+      lastMessageSenderId: 'admin',
+      adminUnreadCount: 1,
+      createdAt: _messages.first.timestamp,
+      updatedAt: _messages.last.timestamp);
+  @override
+  Future<List<ChatConversation>> getConversations() async => [_conversation];
+  @override
+  Future<List<ChatMessage>> getMessages(String id) async => List.of(_messages);
+  @override
+  Stream<List<ChatConversation>> watchConversations() async* {
+    yield await getConversations();
+    await for (final _ in _events.stream) {
+      yield await getConversations();
+    }
+  }
+
+  @override
+  Stream<List<ChatMessage>> watchMessages(String id) async* {
+    yield await getMessages(id);
+    await for (final _ in _events.stream) {
+      yield await getMessages(id);
+    }
+  }
+
+  @override
+  Future<ChatMessage> sendMessage(
+      {required String conversationId,
+      required String text,
+      String senderRole = 'admin',
+      String senderName = 'Market Admin',
+      String senderId = '',
+      String? attachmentUrl,
+      String? attachmentType}) async {
+    if (failSend) throw StateError('Network unavailable');
+    final message = ChatMessage(
+        id: 'message-${_messages.length}',
+        conversationId: conversationId,
+        senderId: 'admin',
+        senderName: senderName,
+        senderRole: senderRole,
+        text: text,
+        timestamp: DateTime.now(),
+        isRead: true);
+    _messages.add(message);
+    _events.add(null);
+    return message;
+  }
+
+  @override
+  Future<void> markAsRead(String id) async {}
+  @override
+  bool hasOlder(String key) => false;
+  @override
+  void dispose() {
+    if (!_closed) {
+      _closed = true;
+      unawaited(_events.close());
+    }
+  }
+}

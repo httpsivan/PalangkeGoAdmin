@@ -126,6 +126,7 @@ class Vendor {
     required this.phone,
     required this.residence,
     this.administrativeNotes = '',
+    this.stallName = '',
     this.blockedReason,
     this.blockedFromReportId,
     this.blockedAt,
@@ -149,6 +150,7 @@ class Vendor {
   final String phone;
   final String residence;
   final String administrativeNotes;
+  final String stallName;
   final String? blockedReason;
   final String? blockedFromReportId;
   final DateTime? blockedAt;
@@ -168,6 +170,7 @@ class Vendor {
     String? blockedBy,
     String? location,
     String? stallType,
+    String? stallName,
     DateTime? closureRequestedAt,
     String? closureReason,
     DateTime? relocationRequestedAt,
@@ -182,6 +185,7 @@ class Vendor {
         name: name,
         email: email,
         stallType: stallType ?? this.stallType,
+        stallName: stallName ?? this.stallName,
         registeredAt: registeredAt,
         status: status ?? this.status,
         location: location ?? this.location,
@@ -277,6 +281,7 @@ class VendorApplication {
     required this.submittedAt,
     required this.status,
     required this.location,
+    this.email = '',
     this.documents = const [],
     this.rejectionReason,
     this.reviewedAt,
@@ -290,6 +295,7 @@ class VendorApplication {
   final DateTime submittedAt;
   final ApplicationStatus status;
   final String location;
+  final String email;
   final List<KycDocument> documents;
   final String? rejectionReason;
   final DateTime? reviewedAt;
@@ -309,6 +315,7 @@ class VendorApplication {
         submittedAt: submittedAt,
         status: status ?? this.status,
         location: location,
+        email: email,
         documents: documents,
         rejectionReason: rejectionReason ?? this.rejectionReason,
         reviewedAt: reviewedAt ?? this.reviewedAt,

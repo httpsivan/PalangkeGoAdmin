@@ -13,3 +13,7 @@ macos/Pods/
 windows/flutter/ephemeral/
 linux/flutter/ephemeral/
 web_plugin_registrant.dart
+
+.firebase/
+firebase-debug.log
+firebase-debug.*.log

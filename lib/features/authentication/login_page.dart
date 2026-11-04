@@ -34,8 +34,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   final formKey = GlobalKey<FormState>();
   final _mobileScrollController = ScrollController();
   final _desktopFormScrollController = ScrollController();
-  // Demo credentials prefill only in demo mode — Firebase mode must never
-  // pre-fill a real administrator's password.
+  // Keep the operator email ready to use; only the demo password is prefilled
+  // in demo mode, never in Firebase mode.
   final email = TextEditingController();
   final password = TextEditingController();
   bool obscure = true;
@@ -46,8 +46,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   @override
   void initState() {
     super.initState();
+    email.text = 'mepo49734@gmail.com';
     if (!ref.read(firebaseEnabledProvider)) {
-      email.text = defaultAdminEmail;
       password.text = defaultAdminPassword;
     }
   }

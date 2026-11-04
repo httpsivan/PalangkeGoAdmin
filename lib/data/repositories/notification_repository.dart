@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/admin_notification.dart';
 import '../../core/config/app_config.dart';
@@ -29,6 +30,13 @@ class NotificationController extends StateNotifier<List<AdminNotification>> {
     _restore();
     if (syncEnabled && _supabase != null) {
       unawaited(_syncNotifications());
+      _notificationChannel = _supabase.subscribeToAdminNotificationChanges(() {
+        _realtimeSyncTimer?.cancel();
+        _realtimeSyncTimer = Timer(
+          const Duration(milliseconds: 200),
+          _syncNotifications,
+        );
+      });
       _syncTimer = Timer.periodic(
         const Duration(seconds: 15),
         (_) => _syncNotifications(),
@@ -40,11 +48,19 @@ class NotificationController extends StateNotifier<List<AdminNotification>> {
   final SupabaseAdminService? _supabase;
   final Set<String> _dismissed = <String>{};
   Timer? _syncTimer;
+  Timer? _realtimeSyncTimer;
+  RealtimeChannel? _notificationChannel;
   bool _syncing = false;
 
   @override
   void dispose() {
     _syncTimer?.cancel();
+    _realtimeSyncTimer?.cancel();
+    if (_notificationChannel != null) {
+      unawaited(
+        _supabase?.client?.removeChannel(_notificationChannel!).then((_) {}),
+      );
+    }
     super.dispose();
   }
 
@@ -76,11 +92,25 @@ class NotificationController extends StateNotifier<List<AdminNotification>> {
         item.id == id ? item.copyWith(isRead: true) : item,
     ];
     await _persistReadState();
+    if (_supabase != null && !id.startsWith('notif-')) {
+      try {
+        await _supabase.markNotificationRead(id);
+      } catch (error) {
+        debugPrint('[admin] Could not sync notification read state: $error');
+      }
+    }
   }
 
   Future<void> markAllRead() async {
     state = [for (final item in state) item.copyWith(isRead: true)];
     await _persistReadState();
+    if (_supabase != null) {
+      try {
+        await _supabase.markAllNotificationsRead();
+      } catch (error) {
+        debugPrint('[admin] Could not sync all notification read states: $error');
+      }
+    }
   }
 
   Future<void> dismiss(String id) async {

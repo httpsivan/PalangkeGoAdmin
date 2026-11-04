@@ -13,7 +13,7 @@ class MockAdminDataSource {
 
   final SharedPreferences _preferences;
 
-  static const defaultAdminName = 'Kirren Michael Fraginal';
+  static const defaultAdminName = 'Market Administrator';
 
   static AppDataSeed initialSeeds() {
     final vendors = seedVendors();

@@ -1580,6 +1580,7 @@ class ScrollableDataTable extends StatelessWidget {
     required this.verticalController,
     this.columnSpacing = 18,
     this.rowHeight = 68,
+    this.horizontalMargin = 24,
     this.minWidth = 0,
     this.emptyState = const EmptyState(),
     this.horizontalScroll = true,
@@ -1590,6 +1591,7 @@ class ScrollableDataTable extends StatelessWidget {
   final ScrollController verticalController;
   final double columnSpacing;
   final double rowHeight;
+  final double horizontalMargin;
   final double minWidth;
   final Widget emptyState;
   final bool horizontalScroll;
@@ -1625,6 +1627,7 @@ class ScrollableDataTable extends StatelessWidget {
                       fontSize: 13,
                     ),
                     headingRowHeight: headingHeight,
+                    horizontalMargin: horizontalMargin,
                     dataRowMinHeight: rowHeight,
                     dataRowMaxHeight: rowHeight,
                     columnSpacing: columnSpacing,
@@ -1639,26 +1642,30 @@ class ScrollableDataTable extends StatelessWidget {
                   ),
                 );
 
+            final content = AnimatedSwitcher(
+              duration: AppMotion.duration(context, AppMotion.component),
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: child,
+              ),
+              child: rows.isEmpty
+                  ? KeyedSubtree(
+                      key: const ValueKey('empty'),
+                      child: emptyState,
+                    )
+                  : KeyedSubtree(
+                      key: const ValueKey('rows'),
+                      child: table(tableRows: rows, headingHeight: 48),
+                    ),
+            );
+            if (!horizontalScroll) {
+              return SizedBox(width: tableWidth, child: content);
+            }
             return SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: ConstrainedBox(
                 constraints: BoxConstraints(minWidth: tableWidth),
-                child: AnimatedSwitcher(
-                  duration: AppMotion.duration(context, AppMotion.component),
-                  transitionBuilder: (child, animation) => FadeTransition(
-                    opacity: animation,
-                    child: child,
-                  ),
-                  child: rows.isEmpty
-                      ? KeyedSubtree(
-                          key: const ValueKey('empty'),
-                          child: emptyState,
-                        )
-                      : KeyedSubtree(
-                          key: const ValueKey('rows'),
-                          child: table(tableRows: rows, headingHeight: 48),
-                        ),
-                ),
+                child: content,
               ),
             );
           },
